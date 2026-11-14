@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Axolotl-Geräuschkontrolle</title>
+<!-- Für Tablets: als App auf den Home-Bildschirm legen, dann startet sie ohne Browserleisten -->
+<meta name="theme-color" content="#1b6f93">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Axolotl">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1b6f93; }
+  body {
+    font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif; color: #12303f;
+    /* Tablet: kein Wackeln, Zoomen, Markieren oder Neuladen durch Tippen und Wischen */
+    position: fixed; inset: 0; overscroll-behavior: none; touch-action: manipulation;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+  }
+  canvas { display: block; width: 100vw; height: 100vh; height: 100dvh; touch-action: none; }
+
+  /* Startbildschirm */
+  #start {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(8, 48, 70, 0.72); padding: 16px; z-index: 10;
+  }
+  #start .card {
+    background: #fdf8ee; border-radius: 24px; padding: 36px 40px; max-width: 520px; width: 100%;
+    text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  }
+  #start h1 { margin: 0 0 10px; font-size: 32px; }
+  #start p { margin: 0 0 22px; font-size: 18px; line-height: 1.45; }
+  #start .hint { font-size: 14px; color: #55707d; margin: 18px 0 0; }
+  #error { display: none; background: #ffe3e0; color: #8a1f14; border-radius: 12px; padding: 12px 14px; font-size: 16px; margin: 0 0 18px; }
+  button {
+    font: inherit; cursor: pointer; border: none; border-radius: 999px;
+    padding: 12px 22px; font-size: 18px; font-weight: 600;
+  }
+  .primary { background: #e0568a; color: #fff; }
+  .primary:hover { background: #c94477; }
+  .secondary { background: transparent; color: #1b6f93; text-decoration: underline; font-weight: 500; font-size: 16px; }
+  button:focus-visible, input:focus-visible { outline: 3px solid #ffd35c; outline-offset: 2px; }
+
+  /* Lehrkraft-Leiste */
+  #panel {
+    position: fixed; z-index: 5; display: none;
+    left: max(16px, env(safe-area-inset-left)); bottom: max(16px, env(safe-area-inset-bottom));
+    background: rgba(253, 248, 238, 0.92); border-radius: 18px; padding: 14px 16px; width: 300px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.25); font-size: 14px;
+    max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow-y: auto;
+  }
+  #panel.collapsed .body { display: none; }
+  #panel.collapsed { width: auto; padding: 6px; background: rgba(253, 248, 238, 0.45); }
+  #panel label { display: block; font-weight: 600; margin: 10px 0 4px; }
+  #panel input[type=range] { width: 100%; accent-color: #e0568a; }
+  #panel .row { display: flex; gap: 8px; margin-top: 12px; }
+  #panel .small { padding: 8px 12px; font-size: 14px; background: #1b6f93; color: #fff; flex: 1; }
+  #toggle { background: transparent; padding: 4px 8px; font-size: 20px; line-height: 1; }
+  #panel:not(.collapsed) #toggle { float: right; margin: -6px -8px 0 0; }
+  .scale { display: flex; justify-content: space-between; color: #55707d; font-size: 12px; }
+  #meter { position: relative; height: 14px; border-radius: 7px; background: #d9e6ea; overflow: hidden; }
+  #meterFill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, #58c38a, #f2c94c 60%, #e0568a); }
+  #meterWrap { position: relative; }
+  #calmMark { position: absolute; top: -3px; width: 4px; height: 20px; border-radius: 2px; background: #12303f; left: 0; }
+  #demoRow { display: none; }
+  #panel label.opt { display: flex; gap: 8px; align-items: center; font-weight: 500; margin: 3px 0; }
+  #panel .title { font-weight: 600; margin: 10px 0 4px; }
+  #panel input[type=radio] { accent-color: #e0568a; margin: 0; }
+  #morphs { display: flex; gap: 10px; }
+  .sw { width: 36px; height: 36px; border-radius: 50%; padding: 0; border: 3px solid #fff; box-shadow: 0 0 0 1px #9fb4bc; }
+  .sw.on { box-shadow: 0 0 0 3px #e0568a; }
+  .note { margin: 10px 0 0; font-size: 13px; line-height: 1.35; color: #55707d; }
+
+  /* Fingerbedienung auf Tablets: größere Flächen und mehr Abstand */
+  body.touch #panel { width: 350px; font-size: 16px; padding: 16px 18px; }
+  body.touch #panel.collapsed { width: auto; padding: 4px; }
+  body.touch #toggle { min-width: 48px; min-height: 48px; font-size: 28px; }
+  body.touch .sw { width: 48px; height: 48px; }
+  body.touch #morphs { gap: 14px; }
+  body.touch #panel label.opt { min-height: 46px; margin: 0; gap: 12px; }
+  body.touch #panel input[type=radio] { width: 24px; height: 24px; }
+  body.touch #panel input[type=range] { height: 44px; }
+  body.touch #panel .small { padding: 14px 16px; font-size: 16px; }
+  body.touch .scale { font-size: 13px; }
+  body.touch .note { font-size: 14px; }
+
+  /* Hochformat: bitte quer drehen */
+  #rotate {
+    position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center;
+    background: rgba(8, 48, 70, 0.9); color: #fdf8ee; text-align: center; padding: 24px;
+  }
+  #rotate .icon { font-size: 64px; line-height: 1; display: block; margin-bottom: 14px; }
+  #rotate p { margin: 0; font-size: 24px; font-weight: 600; }
+  @media (orientation: portrait) and (max-width: 1100px) { #rotate { display: flex; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="start">
+  <div class="card">
+    <h1>Pssst … der Axolotl ruht sich aus</h1>
+    <p>Wenn es im Raum leise ist, bleibt er entspannt liegen. Wird es laut, wird er unruhig.</p>
+    <div id="error"></div>
+    <button class="primary" id="btnMic">Mikrofon starten</button>
+    <p style="margin:14px 0 0"><button class="secondary" id="btnDemo">Ohne Mikrofon ausprobieren</button></p>
+    <p class="hint">Es wird nichts aufgenommen oder gespeichert. Die App misst nur, wie laut es gerade ist.</p>
+  </div>
+</div>
+
+<div id="panel">
+  <button id="toggle" title="Einstellungen ein- oder ausblenden" aria-label="Einstellungen ein- oder ausblenden">⚙︎</button>
+  <div class="body">
+    <label>Lautstärke im Raum</label>
+    <div id="meterWrap">
+      <div id="meter"><div id="meterFill"></div></div>
+      <div id="calmMark" title="Unruhe des Axolotls"></div>
+    </div>
+    <div class="scale"><span>ruhig</span><span>Strich = Unruhe des Axolotls</span><span>laut</span></div>
+
+    <label for="sens">Empfindlichkeit</label>
+    <input type="range" id="sens" min="0" max="100" value="50">
+    <div class="scale"><span>verträgt mehr</span><span>reagiert früher</span></div>
+
+    <div class="title">Farbe des Axolotls</div>
+    <div id="morphs"></div>
+
+    <div class="title">Wenn der Axolotl saugt</div>
+    <label class="opt"><input type="radio" name="eat" value="0" checked> Garnele entkommt knapp</label>
+    <label class="opt"><input type="radio" name="eat" value="1"> Garnele wird gefressen</label>
+    <label class="opt"><input type="radio" name="eat" value="2"> Teils, teils: manche entkommen</label>
+
+    <div id="demoRow">
+      <label for="demo">Test-Lautstärke (ohne Mikrofon)</label>
+      <input type="range" id="demo" min="0" max="100" value="0">
+    </div>
+
+    <div class="row" id="fullRow">
+      <button class="small" id="btnFull">Vollbild</button>
+    </div>
+    <p class="note" id="fsHint" hidden>Für die Ansicht ohne Browserleisten: im Teilen-Menü „Zum Home-Bildschirm" wählen und die App von dort starten.</p>
+    <p class="note" id="sleepHint" hidden>Damit der Bildschirm nicht ausgeht: bitte die automatische Sperre des Tablets ausschalten.</p>
+  </div>
+</div>
+
+<div id="rotate"><div><span class="icon" aria-hidden="true">↻</span><p>Bitte das Tablet quer drehen</p></div></div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const canvas = $('c'), g = canvas.getContext('2d');
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const smooth = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0)); return t * t * (3 - 2 * t); };
+
+  // ---------- Einstellungen ----------
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} }
+  };
+  const sens = $('sens');
+  sens.value = store.get('axo.sens', '50');
+  sens.addEventListener('input', () => store.set('axo.sens', sens.value));
+  const eatRadios = [...document.querySelectorAll('input[name=eat]')];
+  eatRadios.forEach(r => {
+    r.checked = r.value === store.get('axo.eat', '0');
+    r.addEventListener('change', () => { if (r.checked) store.set('axo.eat', r.value); });
+  });
+  // '0' = entkommt immer, '1' = wird immer gefressen, '2' = teils, teils
+  const eatMode = () => (eatRadios.find(r => r.checked) || {}).value || '0';
+
+  // Farbvarianten des Axolotls
+  const MORPHS = {
+    rosa:  { name: 'Rosa', body: '#f7a8c4', dark: '#ec8fb1', fin: 'rgba(250, 190, 212, 0.55)', gill: '#e0568a', gillLight: '#f08db1',
+             eye: '#2a1a2e', line: '#2a1a2e', cheek: 'rgba(224, 86, 138, 0.28)', mouth: '#8a2e52', ring: null, spots: false },
+    wild:  { name: 'Schwarz', body: '#222226', dark: '#3b3b42', fin: 'rgba(120, 120, 134, 0.5)', gill: '#4b2a6b', gillLight: '#7d5aa6',
+             eye: '#050505', line: '#d3d3e0', cheek: 'rgba(150, 150, 168, 0.22)', mouth: '#a970b4', ring: '#8f8fa3', spots: false },
+    gold:  { name: 'Gold', body: '#f3c64e', dark: '#dba93a', fin: 'rgba(246, 214, 120, 0.55)', gill: '#d8402f', gillLight: '#ee7a62',
+             eye: '#2a1a2e', line: '#5a3a10', cheek: 'rgba(216, 64, 47, 0.22)', mouth: '#8a2e2a', ring: null, spots: false },
+    weiss: { name: 'Weiß', body: '#fbf6f2', dark: '#e6dbd5', fin: 'rgba(255, 250, 246, 0.6)', gill: '#e2616e', gillLight: '#f29aa2',
+             eye: '#0d0d0d', line: '#2a1a2e', cheek: 'rgba(226, 97, 110, 0.22)', mouth: '#8a2e52', ring: null, spots: false }
+  };
+  let morphKey = store.get('axo.morph', 'rosa');
+  if (!MORPHS[morphKey]) morphKey = 'rosa';
+  let C = MORPHS[morphKey];
+  for (const key of Object.keys(MORPHS)) {
+    const b = document.createElement('button');
+    b.className = 'sw' + (key === morphKey ? ' on' : '');
+    b.style.background = MORPHS[key].body;
+    b.title = MORPHS[key].name; b.setAttribute('aria-label', 'Farbe: ' + MORPHS[key].name);
+    b.dataset.morph = key;
+    b.addEventListener('click', () => {
+      morphKey = key; C = MORPHS[key]; store.set('axo.morph', key);
+      document.querySelectorAll('.sw').forEach(x => x.classList.toggle('on', x === b));
+    });
+    $('morphs').appendChild(b);
+  }
+
+  // ---------- Ton ----------
+  let analyser = null, buf = null, demoMode = false, running = false, audioCtx = null;
+
+  // ---------- Tablet ----------
+  const isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
+  if (isTouch) document.body.classList.add('touch');
+  document.addEventListener('gesturestart', e => e.preventDefault());       // kein Zoomen mit zwei Fingern (iPad)
+
+  // Bildschirm bleibt an, solange die App läuft
+  let wake = null;
+  async function keepAwake() {
+    if (!('wakeLock' in navigator)) { if (isTouch) $('sleepHint').hidden = false; return; }
+    try { if (document.visibilityState === 'visible') wake = await navigator.wakeLock.request('screen'); } catch { /* z. B. Stromsparmodus */ }
+  }
+  // Nach App-Wechsel oder Entsperren: Bildschirm wieder wach halten und Tonmessung fortsetzen
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !running) return;
+    keepAwake();
+    if (audioCtx && audioCtx.state !== 'running') audioCtx.resume().catch(() => {});
+  });
+  // Hat das Tablet das Mikrofon beendet, wieder den Startknopf zeigen
+  function micLost() {
+    if (demoMode) return;
+    running = false; analyser = null;
+    const err = $('error');
+    err.textContent = 'Das Mikrofon wurde unterbrochen. Bitte noch einmal starten.';
+    err.style.display = 'block';
+    $('panel').style.display = 'none';
+    $('start').style.display = 'flex';
+  }
+
+  async function startMic() {
+    const err = $('error');
+    err.style.display = 'none';
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('unsupported');
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      });
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (audioCtx) audioCtx.close().catch(() => {});
+      const ac = audioCtx = new AC();
+      await ac.resume();
+      analyser = ac.createAnalyser();
+      analyser.fftSize = 2048;
+      ac.createMediaStreamSource(stream).connect(analyser);
+      stream.getAudioTracks().forEach(t => t.addEventListener('ended', micLost));
+      buf = new Float32Array(analyser.fftSize);
+      begin();
+    } catch (e) {
+      const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
+      const none = e && (e.name === 'NotFoundError' || e.name === 'OverconstrainedError');
+      err.textContent = denied
+        ? 'Das Mikrofon wurde nicht freigegeben. Bitte oben in der Adresszeile des Browsers das Mikrofon erlauben und noch einmal auf „Mikrofon starten“ klicken.'
+        : none
+          ? 'Es wurde kein Mikrofon gefunden. Bitte prüfen, ob ein Mikrofon angeschlossen und eingeschaltet ist.'
+          : 'Das Mikrofon konnte nicht gestartet werden. Bitte die Seite in Chrome, Edge, Firefox oder Safari über einen https-Link öffnen.';
+      err.style.display = 'block';
+    }
+  }
+
+  function begin() {
+    running = true;
+    $('start').style.display = 'none';
+    $('panel').style.display = 'block';
+    $('demoRow').style.display = demoMode ? 'block' : 'none';
+    if (isTouch) $('panel').classList.add('collapsed');      // auf Tablets verdeckt die Leiste sonst das Becken
+    keepAwake();
+  }
+
+  $('btnMic').addEventListener('click', startMic);
+  $('btnDemo').addEventListener('click', () => { demoMode = true; begin(); });
+  $('toggle').addEventListener('click', () => $('panel').classList.toggle('collapsed'));
+  // Vollbild, mit Ersatzweg für Safari. Ohne Vollbild-Funktion: Hinweis auf den Home-Bildschirm.
+  const rootEl = document.documentElement;
+  const fsRequest = rootEl.requestFullscreen || rootEl.webkitRequestFullscreen;
+  const fsExit = document.exitFullscreen || document.webkitExitFullscreen;
+  const fsActive = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const standalone = navigator.standalone === true || (window.matchMedia &&
+    (matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches));
+  if (standalone) $('fullRow').hidden = true;                 // läuft schon als App ohne Browserleisten
+  else if (!fsRequest) { $('fullRow').hidden = true; $('fsHint').hidden = false; }
+  else if (isTouch) $('fsHint').hidden = false;
+  $('btnFull').addEventListener('click', () => {
+    try {
+      const p = fsActive() ? fsExit.call(document) : fsRequest.call(rootEl);
+      if (p && p.catch) p.catch(() => {});
+    } catch { /* Vollbild nicht erlaubt */ }
+  });
+
+  // Aktuelle Lautstärke als Wert 0..1 (0 = ruhig genug, 1 = zu laut)
+  function readLevel() {
+    if (demoMode) return $('demo').value / 100;
+    if (!analyser) return 0;
+    analyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+    const db = 20 * Math.log10(Math.sqrt(sum / buf.length) + 1e-7);
+    const s = sens.value / 100;
+    const quietDb = lerp(-32, -66, s);   // darunter: völlig ruhig
+    const loudDb = quietDb + 26;         // darüber: zu laut
+    return clamp((db - quietDb) / (loudDb - quietDb));
+  }
+
+  // ---------- Zustand ----------
+  // Ort im Becken: x (links/rechts), h (Höhe über dem Sand), z (Tiefe: 0 = ganz hinten, 1 = ganz vorne)
+  const st = {
+    level: 0,      // geglättete Lautstärke (schnell, für die Anzeige)
+    unruhe: 0,     // träge Unruhe des Axolotls 0..1
+    time: 0,
+    x: 0, h: 0, z: 0.55, vx: 0, vh: 0, vzp: 0, dir: 1, tilt: 0,
+    face: 1,       // Richtung des Körpers, gleitet beim Wenden von -1 nach 1
+    yaw: 1,        // Richtung des Kopfes: dreht zuerst, der Körper folgt
+    burst: 0, thrust: 1, tuck: 0,   // Schwimmstöße, Schubkraft, angelegte Beine
+    sad: 0,        // Kummer über das trübe Wasser, 0..1
+    tx: 0, th: 0, tz: 0.55, tTimer: 0, swim: false,
+    gill: 0, tail: 0, breath: 0, leg: 0, crawl: 0, placed: false,
+    snapCool: 0, returnT: 0, prey: null, shrimp: [],
+    suck: null, mouth: 0, gulp: 0, quietT: 0, flow: [], flowDir: null, bubbles: [],
+    outT: 0, noPrey: false, murk: 0, puffs: [], puffK: 0
+  };
+  window.axo = st;
+
+  // ---------- Raum und Tiefe ----------
+  let W = 0, H = 0, S = 1, backY = 0, frontY = 0;
+  const HOME_Z = 0.55;
+  const gy = z => lerp(backY, frontY, z);                  // Höhe des Sandbodens im Bild bei Tiefe z
+  const zs = z => lerp(0.6, 1.25, z);                      // Größe: hinten kleiner, vorne größer
+  const sy = (h, z) => gy(z) - h * zs(z);                  // Bildhöhe eines Punktes
+  const DZ = () => 520 * S;                                // Tiefe des Beckens, in Schwimmstrecke gerechnet
+  const topH = z => (gy(z) - 60 * S) / zs(z);              // höchste erlaubte Höhe (unter der Wasseroberfläche)
+  const homeH = () => 22 * S;                              // Axolotl liegt auf dem Sand
+  const shrimpH = () => 8 * S;                             // Garnele sitzt auf dem Sand
+  const dist3 = (a, b) => Math.hypot(a.x - b.x, a.h - b.h, (a.z - b.z) * DZ());
+  const SAND_BACK = [176, 196, 178], SAND_FRONT = [236, 217, 166];
+  const sandAt = z => 'rgb(' + SAND_BACK.map((c, i) => Math.round(lerp(c, SAND_FRONT[i], z))).join(',') + ')';
+
+  // ---------- Landschaft: Lavasteine mit Höhlen, Wasserpflanzen, Kiesel ----------
+  const mkRnd = seed => () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const ROCKS = [
+    { fx: 0.17, z: 0.2, w: 250, h: 125, caves: [[0.2, 30, 19], [-0.22, 23, 15]], seed: 11 },
+    { fx: 0.83, z: 0.5, w: 280, h: 150, caves: [[-0.24, 30, 19], [0.2, 24, 16]], seed: 23 },
+    { fx: 0.22, z: 0.9, w: 130, h: 62, caves: [[0.04, 22, 14]], seed: 5 }
+  ].map(r => {
+    const rnd = mkRnd(r.seed), n = 14;
+    r.shape = [];
+    for (let i = 0; i <= n; i++) {
+      const ang = Math.PI * (1 - i / n), rad = 0.82 + rnd() * 0.22;
+      r.shape.push([Math.cos(ang) * rad * 0.5, Math.sin(ang) * rad]);
+    }
+    r.pores = [];
+    for (let i = 0; i < 18; i++) {
+      const x = rnd() * 0.76 - 0.38, y = 0.3 + rnd() * 0.45;
+      if (y < Math.sqrt(Math.max(0, 1 - (x / 0.42) ** 2)) * 0.8) r.pores.push([x, y, 2 + rnd() * 4, rnd() < 0.3]);
+    }
+    return r;
+  });
+  const PLANTS = [
+    { fx: 0.06, z: 0.1, n: 5, h: 1.1, seed: 3 }, { fx: 0.62, z: 0.16, n: 5, h: 1.25, seed: 13 },
+    { fx: 0.36, z: 0.3, n: 4, h: 0.9, seed: 8 }, { fx: 0.96, z: 0.3, n: 4, h: 0.85, seed: 29 },
+    // Vorne stehen Pflanzen nur am Rand, damit der Ruheplatz in der Mitte frei bleibt
+    { fx: 0.81, z: 0.8, n: 4, h: 0.52, seed: 17 }, { fx: 0.08, z: 0.68, n: 3, h: 0.48, seed: 31 },
+    { fx: 0.92, z: 0.95, n: 3, h: 0.36, seed: 41 }
+  ].map(c => {
+    const rnd = mkRnd(c.seed);
+    c.blades = [];
+    for (let i = 0; i < c.n; i++) c.blades.push({
+      ox: (i - (c.n - 1) / 2) * 16 + rnd() * 8 - 4, hf: 0.65 + rnd() * 0.35, ph: rnd() * 6.28, w: 10 + rnd() * 6, wv: rnd(),
+      col: ['#3f9a55', '#2f7d4a', '#5fb565'][Math.floor(rnd() * 3)]
+    });
+    c.ph = rnd() * 6; c.k = 0; c.kv = 0; c.e = 0;
+    return c;
+  });
+  // Verdecken: Der Axolotl wechselt nur dann vor oder hinter einen Stein oder ein Pflanzenbüschel,
+  // wenn er es im Bild gerade nicht überlappt. So springt er nie plötzlich hinter etwas, das eben noch hinter ihm war.
+  ROCKS.forEach(r => { r.hw = r.w * 0.5 + 6; });
+  PLANTS.forEach(c => { c.hw = c.n * 8 + 28; });
+  const OBST = [...ROCKS, ...PLANTS];
+  // Bereich, den Kopf und Rumpf des Axolotls im Bild einnehmen
+  const axoSpan = () => {
+    const k = S * zs(st.z), b = st.x - st.face * 150 * k;
+    return [Math.min(st.x, b) - 58 * k, Math.max(st.x, b) + 58 * k];
+  };
+  const overlaps = (o, lo, hi) => { const hw = o.hw * S * zs(o.z), cx = o.fx * W; return hi > cx - hw && lo < cx + hw; };
+
+  const PEBBLES = [], MOTES = [];
+  (() => {
+    const rnd = mkRnd(97);
+    for (let i = 0; i < 46; i++) PEBBLES.push({ fx: rnd(), z: Math.pow(rnd(), 1.3), r: 3 + rnd() * 5, c: ['#a89a84', '#8d8273', '#c4b598', '#7b7168'][Math.floor(rnd() * 4)] });
+    for (let i = 0; i < 48; i++) MOTES.push({ fx: rnd(), fy: rnd(), z: rnd(), ph: rnd() * 6.28 });
+  })();
+
+  let caves = [];
+  function layout() {
+    caves = [];
+    for (const r of ROCKS) {
+      r.x = r.fx * W;
+      const k = S * zs(r.z);
+      r.caves.forEach(([ox, rx, ry], j) => {
+        // Jede Höhle hat ihre eigene, unregelmäßige Öffnung
+        const rnd = mkRnd(r.seed * 31 + j * 7 + 1), pts = [];
+        for (let i = 0; i < 12; i++) {
+          const ang = i / 12 * Math.PI * 2, rad = 0.8 + rnd() * 0.3;
+          let py = Math.sin(ang) * rad;
+          if (py > 0.65) py = 0.65 + (py - 0.65) * 0.3;         // unten flacher: liegt auf dem Sand
+          pts.push([Math.cos(ang) * rad, py]);
+        }
+        caves.push({ x: r.x + ox * r.w * k, h: ry * 0.75 * S, z: r.z, rx: rx * k, ry: ry * k, pts });
+      });
+    }
+  }
+  const caveLoad = i => st.shrimp.filter(q => (q.state === 'hidden' || q.state === 'flee') && q.cave === i).length;
+  function emptiestCave() {
+    let best = 0, bl = Infinity;
+    caves.forEach((c, i) => { const l = caveLoad(i) + Math.random() * 0.9; if (l < bl) { bl = l; best = i; } });
+    return best;
+  }
+  // Nächste Höhle, möglichst auf der vom Axolotl abgewandten Seite
+  function pickCave(p) {
+    let best = 0, bc = Infinity;
+    caves.forEach((c, i) => {
+      // Volle Höhlen werden gemieden, damit sich die Garnelen verteilen (höchstens zwei pro Höhle)
+      const load = caveLoad(i);
+      const cost = dist3(c, p) + ((c.x - st.x) * (p.x - st.x) < 0 ? 400 * S : 0) + load * 350 * S + (load >= 2 ? 5000 * S : 0);
+      if (cost < bc) { bc = cost; best = i; }
+    });
+    return best;
+  }
+  const plantHeight = c => c.h * backY;                    // Höhe eines Büschels über dem Sand
+  function updatePlants(dt, a) {
+    const v = Math.hypot(st.vx, st.vh);
+    for (const c of PLANTS) {
+      const cx = c.fx * W;
+      // Nähe des Axolotls in derselben Tiefe: schon sein Schwimmen in der Nähe bringt die Halme in Bewegung
+      const dxn = Math.abs(st.x - cx) / (240 * S * zs(c.z)), dzn = Math.abs(st.z - c.z) * DZ() / (150 * S);
+      if (dxn < 1 && dzn < 1 && st.h < plantHeight(c) * 1.1) {
+        const prox = (1 - dxn) * (1 - dzn);
+        c.e = Math.min(1, c.e + dt * prox * Math.min(v / (150 * S), 2.5) * 2.2);
+        if (dxn < 0.45 && dzn < 0.6 && v > 40 * S) {         // er stößt dagegen
+          c.kv += Math.sign(st.vx || 1) * Math.min(v / S, 400) * dt * 3.6;
+          c.e = Math.min(1, c.e + dt * 3);
+        }
+      }
+      c.kv += (-c.k * 26 - c.kv * 1.4) * dt;
+      c.k = clamp(c.k + c.kv * dt, -110, 110);
+      c.e = Math.max(0, c.e - dt * 0.2);
+      c.ph += dt * (0.5 + 1.0 * a + 2.5 * c.e);
+    }
+  }
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, isTouch ? 1.5 : 2);   // auf Tablets etwas gröber: flüssiger, schont den Akku
+    const oldW = W;
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    S = Math.min(W, H) / 620;
+    backY = H * 0.66; frontY = H * 0.98;
+    if (!W || !H) return;
+    layout();
+    if (!st.placed) { st.x = W / 2; st.h = homeH(); st.z = HOME_Z; st.placed = true; }
+    else if (oldW) { st.x *= W / oldW; for (const p of st.shrimp) { p.x *= W / oldW; p.tx *= W / oldW; } }
+  }
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => setTimeout(resize, 250));   // Tablet gedreht
+  resize();
+
+  // ---------- Garnelen ----------
+  // Echte Zuchtformen: einfarbig, mit Rückenstrich oder gebändert
+  const SHRIMP_COLORS = [
+    { name: 'Red Cherry', base: '#e2382f' },
+    { name: 'Orange Sakura', base: '#f58a2a' },
+    { name: 'Yellow Neon', base: '#f4cf3a', stripe: '#fffbe0' },
+    { name: 'Crystal Red', base: '#d8322c', band: '#ffffff' },
+    { name: 'Crystal Black', base: '#1c1c22', band: '#ffffff' }
+  ];
+
+  function retarget(p, a, noHover) {
+    // Ab und zu bleibt sie kurz auf der Stelle stehen und paddelt nur
+    p.hover = !noHover && a < 0.5 && Math.random() < 0.22;
+    if (p.hover) { p.tx = p.x; p.th = p.h; p.tz = p.z; p.timer = 1 + Math.random() * 1.5; return; }
+    const m = 70 * S;
+    let x = lerp(m, W - m, Math.random());
+    if (a > 0.25 && Math.abs(x - st.x) < 220 * S) x = clamp(st.x + (x < st.x ? -1 : 1) * 260 * S, m, W - m);
+    p.tx = x;
+    p.tz = lerp(0.06, 0.94, Math.random());
+    const rest = Math.random() < 0.15;       // meist schwimmen, selten kurz auf dem Sand rasten
+    p.th = rest ? shrimpH() : lerp(30 * S, topH(p.tz) - 20 * S, Math.random());
+    p.timer = rest ? 3 + Math.random() * 2 : 5 + Math.random() * 6;
+  }
+
+  function initShrimp() {
+    st.shrimp = SHRIMP_COLORS.map((color, i) => {
+      const z = lerp(0.1, 0.9, Math.random());
+      const p = { color, x: lerp(0.12, 0.88, (i + 0.5) / SHRIMP_COLORS.length) * W, h: lerp(40 * S, topH(z) - 40 * S, Math.random()), z,
+                  vx: 0, vh: 0, vzp: 0, dir: i % 2 ? 1 : -1, state: 'free', timer: Math.random() * 3, tx: 0, th: 0, tz: z, ph: i * 1.7, sc: 1, al: 1 };
+      p.tx = p.x; p.th = p.h;
+      return p;
+    });
+  }
+
+  function nearestShrimp() {
+    let best = null, bd = Infinity;
+    for (const p of st.shrimp) {
+      if (p.state !== 'free' || p.x < 20 || p.x > W - 20) continue;
+      const d = dist3(p, st);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  }
+
+  // ---------- Einsaugen ----------
+  const SUCK_TIME = 3;                         // Sekunden, bis die Garnele im Maul ist
+  const mouthPos = () => ({ x: st.x + st.yaw * 12 * S * zs(st.z), h: st.h - 22 * S, z: st.z });
+
+  function startSuck(p, side) {
+    st.dir = side;
+    const m = mouthPos();
+    const dx = p.x - m.x, dy = sy(p.h, p.z) - sy(m.h, m.z), d = Math.hypot(dx, dy) || 1;
+    const mode = eatMode();                    // bei „teils, teils" entscheidet der Zufall, ob sie entkommt
+    st.suck = { p, t: 0, side, sx: p.x, sh: p.h, sz: p.z, k: 0, mode, eat: mode === '1' || (mode === '2' && Math.random() < 0.5) };
+    st.flowDir = { ux: dx / d, uy: dy / d, len: d };
+    st.quietT = 0;
+    p.state = 'sucked'; p.vx = p.vh = p.vzp = 0; p.dir = side;   // Kopf vom Axolotl weg: sie schwimmt dagegen an
+  }
+
+  function endSuck(eaten) {
+    const s = st.suck, p = s.p;
+    st.suck = null;
+    st.snapCool = lerp(7, 4, clamp((st.unruhe - 0.45) / 0.55));
+    p.sc = 1; p.al = 1;
+    if (eaten) {
+      p.state = 'gone'; st.gulp = 1.2;
+      const m = mouthPos();
+      for (let i = 0; i < 3; i++) st.bubbles.push({ x: m.x + (i - 1) * 9 * S, h: m.h, z: m.z, r: (3 + i * 1.5) * S, t: -i * 0.25 });
+    } else {
+      if (s.mode === '1') { p.state = 'free'; retarget(p, st.unruhe, true); p.boost = 1.2; }   // „wird gefressen": kein Verstecken
+      else { p.state = 'flee'; p.cave = pickCave(p); }                                         // flitzt in eine Höhle
+    }
+  }
+
+  function updateSuck(dt) {
+    const s = st.suck, p = s.p;
+    s.t += dt;
+    const q = clamp(s.t / SUCK_TIME), m = mouthPos();
+    // Sogrichtung immer vom Startpunkt der Garnele zum Maul, auch wenn der Axolotl noch etwas treibt
+    const fx = s.sx - m.x, fy = sy(s.sh, s.sz) - sy(m.h, m.z), fl = Math.hypot(fx, fy) || 1;
+    const d = st.flowDir = { ux: fx / fl, uy: fy / fl, len: fl };
+    const e = Math.pow(q, 2.2);                              // erst langsam, dann schnell
+    const wig = Math.sin(s.t * 22) * 4 * S * (1 - q);        // Zappeln
+    p.x = lerp(s.sx, m.x, e) - d.uy * wig;
+    p.h = lerp(s.sh, m.h, e) - d.ux * wig;
+    p.z = lerp(s.sz, m.z, e);
+    p.sc = lerp(1, 0.3, smooth(0.55, 1, q));
+    p.al = 1 - 0.7 * smooth(0.9, 1, q);
+    p.ph += dt * 26;
+    s.k += dt * 40;
+    while (s.k >= 1) { s.k -= 1; st.flow.push({ u: 0, off: Math.random() * 2 - 1, bub: Math.random() < 0.25 }); }
+    // Wird es hörbar leiser, lässt der Sog nach
+    st.quietT = st.level < 0.3 ? st.quietT + dt : 0;
+    // Bei „wird gefressen" rettet eine kurze Sprechpause nicht: Er lässt nur los, wenn er sich wirklich beruhigt hat
+    if (!st.swim || (s.mode !== '1' && st.quietT > 0.4)) return endSuck(false);
+    if (!s.eat && q >= 0.8) return endSuck(false);
+    if (q >= 1) endSuck(true);
+  }
+
+  function updateFx(dt) {
+    st.mouth += ((st.suck ? 1 : 0) - st.mouth) * (1 - Math.exp(-dt / 0.15));
+    st.gulp = Math.max(0, st.gulp - dt);
+    for (const f of st.flow) f.u += dt * (0.45 + 1.6 * f.u);
+    st.flow = st.flow.filter(f => f.u < 1);
+    for (const b of st.bubbles) { b.t += dt; if (b.t > 0) { b.h += 45 * S * dt; b.x += Math.sin(b.t * 5) * 10 * S * dt; } }
+    st.bubbles = st.bubbles.filter(b => b.t < 2.2);
+
+    // Keine Garnele mehr da: Er wühlt suchend den Sand auf, das Wasser wird trüb
+    st.noPrey = st.shrimp.length > 0 && !st.shrimp.some(p => p.state === 'free' || p.state === 'sucked' || p.state === 'flee');
+    if (st.noPrey && st.swim) st.murk = Math.min(1, st.murk + dt / 15);
+    else if (!st.swim) st.murk = Math.max(0, st.murk - dt / 20);
+    if (st.noPrey && st.swim && st.h < 120 * S) {
+      st.puffK += dt * 7;
+      while (st.puffK >= 1) {
+        st.puffK -= 1;
+        st.puffs.push({ x: st.x - st.dir * 60 * S + (Math.random() - 0.5) * 120 * S, h: 4 * S, z: st.z,
+                        r: (14 + Math.random() * 14) * S, t: 0, vx: (Math.random() - 0.5) * 30 * S });
+      }
+    }
+    for (const f of st.puffs) { f.t += dt; f.h += 14 * S * dt; f.x += f.vx * dt; f.r += 16 * S * dt; }
+    st.puffs = st.puffs.filter(f => f.t < 3);
+    for (const m of MOTES) { m.fx += dt * (0.004 + 0.012 * st.unruhe) * (0.5 + m.z); if (m.fx > 1.02) m.fx -= 1.04; }
+    updatePlants(dt, st.unruhe);
+  }
+
+  function updateShrimp(dt, a) {
+    if (!st.shrimp.length && W) initShrimp();
+    // Rückkehr, wenn es ruhig ist
+    if (a < 0.2) {
+      st.returnT += dt; st.outT += dt;
+      if (st.outT >= 4) {                      // versteckte Garnelen trauen sich einzeln heraus
+        st.outT = 0;
+        const h = st.shrimp.find(q => q.state === 'hidden');
+        if (h) { h.state = 'free'; retarget(h, a); }
+      }
+      if (st.returnT >= 10) {                  // gefressene kommen aus den Höhlen zurück
+        st.returnT = 0;
+        const p = st.shrimp.find(q => q.state === 'gone');
+        if (p && caves.length) { const c = caves[emptiestCave()]; p.x = c.x; p.h = c.h; p.z = c.z; p.vx = p.vh = p.vzp = 0; p.state = 'free'; retarget(p, a); }
+      }
+    } else { st.returnT = 0; st.outT = 0; }
+
+    for (const p of st.shrimp) {
+      if (p.face === undefined) p.face = p.dir;
+      p.face += (p.dir - p.face) * (1 - Math.exp(-dt / 0.24));   // dreht sich weich in die neue Richtung
+      if (p.state === 'gone' || p.state === 'sucked') continue;
+      if (p.state === 'hidden') {
+        const c = caves[p.cave] || caves[0];   // bleibt in der Höhle, bis es ruhig ist
+        if (c) { p.x = c.x; p.h = c.h; p.z = c.z; p.dir = c.x < W / 2 ? 1 : -1; }
+        p.ph += dt * 3;
+        continue;
+      }
+      let speed, tau;
+      if (p.state === 'flee') {
+        const c = caves[p.cave] || caves[0];
+        p.tx = c.x; p.th = c.h; p.tz = c.z; speed = 440 * S; tau = 0.1;
+        if (dist3(c, p) < 16 * S) { p.state = 'hidden'; p.vx = p.vh = p.vzp = 0; continue; }
+      } else {
+        p.timer -= dt;
+        if (p.timer <= 0 || (!p.hover && dist3({ x: p.tx, h: p.th, z: p.tz }, p) < 10 * S)) retarget(p, a);
+        // Schwimmt in kleinen Schüben statt gleichmäßig
+        speed = 30 * S * (1 + 1.5 * a) * (0.45 + 0.75 * Math.pow(Math.sin(p.ph * 0.22), 2)); tau = 0.6;
+        if (p.boost > 0) { p.boost -= dt; speed = 230 * S; tau = 0.15; }      // gerade dem Sog entkommen
+        if (st.swim && dist3(p, st) < 170 * S) {   // weicht dem Axolotl aus
+          p.tx = clamp(p.x + (p.x >= st.x ? 1 : -1) * 200 * S, 30 * S, W - 30 * S); p.th = p.h; p.tz = p.z;
+          speed = 70 * S;
+        }
+      }
+      const dx = p.tx - p.x, dh = p.th - p.h, dzp = (p.tz - p.z) * DZ(), d = Math.hypot(dx, dh, dzp);
+      const want = d > 1 ? Math.min(speed, d * 3) : 0;
+      const f = 1 - Math.exp(-dt / tau);
+      p.vx += ((d > 1 ? dx / d * want : 0) - p.vx) * f;
+      p.vh += ((d > 1 ? dh / d * want : 0) - p.vh) * f;
+      p.vzp += ((d > 1 ? dzp / d * want : 0) - p.vzp) * f;
+      p.x += p.vx * dt;
+      p.z = clamp(p.z + p.vzp / DZ() * dt, 0.03, 0.97);
+      p.h = clamp(p.h + p.vh * dt, shrimpH(), topH(p.z));
+      if (Math.abs(p.vx) > 8 * S) p.dir = p.vx > 0 ? 1 : -1;       // immer mit dem Kopf voran, kein Zappeln
+      // Nase hoch beim Steigen, runter beim Sinken
+      const wantPitch = clamp(Math.atan2(p.vh, Math.abs(p.vx) + 20 * S) * 0.7, -0.5, 0.5);
+      p.pitch = (p.pitch || 0) + (wantPitch - (p.pitch || 0)) * (1 - Math.exp(-dt / 0.3));
+      p.ph += dt * (7 + Math.hypot(p.vx, p.vh, p.vzp) / (5 * S));
+    }
+  }
+
+  // ---------- Logik ----------
+  const TAU_UP = 3.0;    // Sekunden, bis anhaltender Lärm wirkt
+  const TAU_DOWN = 6.0;  // Sekunden zum Beruhigen
+
+  function update(dt) {
+    st.time += dt;
+    const raw = running ? readLevel() : 0;
+    st.level += (raw - st.level) * (1 - Math.exp(-dt / 0.25));
+    const tau = st.level > st.unruhe ? TAU_UP : TAU_DOWN;
+    st.unruhe += (st.level - st.unruhe) * (1 - Math.exp(-dt / tau));
+    const a = st.unruhe;
+
+    st.gill += dt * lerp(1.2, 6.5, a);
+    st.tail += dt * lerp(0.8, 7.5, a);
+    st.breath += dt * 1.4;
+    st.crawl += dt * 0.35;
+
+    // Schwimmen mit Hysterese, damit er nicht hin- und herspringt
+    if (!st.swim && a > 0.6) { st.swim = true; st.tTimer = 0; st.snapCool = Math.max(st.snapCool, 1.5); }
+    if (st.swim && a < 0.45) st.swim = false;
+
+    st.snapCool = Math.max(0, st.snapCool - dt);
+    updateShrimp(dt, a);
+    updateFx(dt);
+    const prey = st.prey = st.suck ? st.suck.p : nearestShrimp();
+
+    let speed;
+    if (st.suck) {
+      updateSuck(dt);                           // bleibt stehen und saugt
+      st.tx = st.x; st.th = st.h; st.tz = st.z; speed = 0;
+    } else if (st.swim) {
+      const k = clamp((a - 0.45) / 0.55);
+      if (prey && st.snapCool <= 0) {
+        // Jagd: auf die Tiefe der Garnele schwimmen, davor anhalten und einsaugen
+        const side = prey.x >= st.x ? 1 : -1, pk = S * zs(prey.z);
+        st.tx = prey.x - side * 150 * pk; st.th = Math.max(homeH(), prey.h + 22 * S); st.tz = prey.z;
+        st.tTimer = 0;
+        if (Math.abs(prey.x - st.x) < 210 * pk && Math.abs(st.th - st.h) < 60 * S && Math.abs(prey.z - st.z) * DZ() < 45 * S) startSuck(prey, side);
+      } else {
+        st.tTimer -= dt;
+        if (st.tTimer <= 0 || dist3({ x: st.tx, h: st.th, z: st.tz }, st) < 40 * S) {
+          const m = 140 * S;
+          st.tx = lerp(m, W - m, Math.random());
+          st.tz = lerp(0.1, 0.9, Math.random());
+          st.th = st.noPrey ? lerp(homeH(), 90 * S, Math.random())               // sucht dicht über dem Boden
+                            : lerp(70 * S, topH(st.tz) - 80 * S, Math.random());
+          st.tTimer = lerp(5, 2.2, k) * (0.7 + Math.random() * 0.6);     // längere Bahnen, weniger Haken
+        }
+      }
+      speed = lerp(60, 300, k) * S;
+    } else if (a > 0.25) {
+      // krabbelt über den Sand, auch nach hinten und vorne
+      st.tx = W / 2 + Math.sin(st.crawl) * W * 0.22;
+      st.tz = HOME_Z + Math.sin(st.crawl * 0.7 + 1) * 0.3;
+      st.th = homeH();
+      speed = lerp(15, 60, smooth(0.25, 0.6, a)) * S;
+    } else {
+      st.tx = W / 2; st.th = homeH(); st.tz = HOME_Z;   // sinkt zum Boden und kehrt gemächlich zum Ruheplatz zurück
+      speed = 60 * S;
+    }
+
+    // Perspektive: Liegt ein Stein oder Pflanzenbüschel in der Tiefe zwischen ihm und seinem Ziel und überlappt er es
+    // gerade im Bild, hält er seine Tiefe und schwimmt erst seitlich daran vorbei. So taucht er nie durch etwas hindurch.
+    if (!st.suck) {
+      const [lo, hi] = axoSpan();
+      let block = null;
+      for (const o of OBST) {
+        if ((o.z - st.z) * (st.tz - o.z) <= 0 || !overlaps(o, lo, hi)) continue;
+        if (!block || Math.abs(o.z - st.z) < Math.abs(block.z - st.z)) block = o;
+      }
+      if (block) {
+        const k = S * zs(st.z), cx = block.fx * W, reach = block.hw * S * zs(block.z) + 235 * k;
+        if (st.detourObj !== block) {
+          const okL = cx - reach > 40 * S, okR = cx + reach < W - 40 * S;
+          st.detourSide = okL && okR ? (st.x >= cx ? 1 : -1) : okR ? 1 : okL ? -1 : (cx > W / 2 ? -1 : 1);
+          st.detourObj = block;
+        }
+        st.tx = cx + st.detourSide * reach;
+        st.tz = block.z + (st.z > block.z ? 0.02 : -0.02);
+      } else st.detourObj = null;
+    }
+
+    const dx = st.tx - st.x, dh = st.th - st.h, dzp = (st.tz - st.z) * DZ(), d = Math.hypot(dx, dh, dzp);
+    // Natürlicher Rhythmus: beim Schwimmen Stoß und Gleiten im Wechsel, beim Krabbeln Schritt für Schritt
+    let thrust = 1;
+    if (st.suck) thrust = 0.5;
+    else if (st.swim) {
+      st.burst += dt * lerp(1.6, 3, clamp((a - 0.45) / 0.55));
+      thrust = lerp(0.72, 1.1, 0.5 + 0.5 * Math.sin(st.burst));
+    } else if (a > 0.25) thrust = 0.5 + 0.5 * Math.abs(Math.sin(st.leg));
+    st.thrust += (thrust - st.thrust) * (1 - Math.exp(-dt / 0.15));
+    speed *= st.thrust;
+    const want = d > 1 ? Math.min(speed, d * 2) : 0;
+    const f = 1 - Math.exp(-dt / (st.suck ? 0.12 : st.swim ? 0.65 : 0.8));   // weiche Bögen statt harter Richtungswechsel
+    st.vx += ((d > 1 ? dx / d * want : 0) - st.vx) * f;
+    st.vh += ((d > 1 ? dh / d * want : 0) - st.vh) * f;
+    st.vzp += ((d > 1 ? dzp / d * want : 0) - st.vzp) * f;
+    st.x += st.vx * dt;
+    let nz = clamp(st.z + st.vzp / DZ() * dt, 0.03, 0.97);
+    {
+      // Feste Regel: kein Wechsel vor/hinter ein Hindernis, solange er es im Bild überlappt
+      const [lo, hi] = axoSpan();
+      for (const o of OBST) {
+        if ((st.z - o.z) * (nz - o.z) < 0 && overlaps(o, lo, hi)) { nz = o.z + (st.z > o.z ? 0.004 : -0.004); st.vzp = 0; }
+      }
+    }
+    st.z = nz;
+    st.h = clamp(st.h + st.vh * dt, homeH(), topH(st.z));
+    if (Math.abs(st.vx) > 22 * S) st.dir = st.vx > 0 ? 1 : -1;   // wendet nur bei deutlicher Bewegung, kein Zappeln
+    if (st.suck) st.dir = st.suck.side;
+    // Wenden: erst dreht der Kopf in die neue Richtung, dann schwenkt der Körper hinterher
+    st.yaw += (st.dir - st.yaw) * (1 - Math.exp(-dt / 0.2));
+    st.face += (st.dir - st.face) * (1 - Math.exp(-dt / 0.45));
+
+    // Kummer wächst, solange er bei Lärm im leeren Becken sucht, und legt sich, sobald es hörbar leise ist
+    const quiet = st.level < 0.3;
+    if (st.noPrey && st.swim && !quiet) st.sad = Math.min(1, st.sad + dt / 4);
+    else if (quiet || !st.swim) st.sad = Math.max(0, st.sad - dt / 6.5);
+
+    const v = Math.hypot(st.vx, st.vh, st.vzp);
+    st.leg += dt * (2 + v / (12 * S));
+    st.tuck += (smooth(70 * S, 200 * S, v) - st.tuck) * (1 - Math.exp(-dt / 0.3));   // beim schnellen Schwimmen Beine anlegen
+    const lift = (st.h < homeH() + 4 * S) ? -0.12 * smooth(0.2, 0.5, a) : 0;
+    const wantTilt = clamp(Math.atan2(-st.vh, Math.abs(st.vx) + 30 * S) * 0.6, -0.5, 0.5) + lift;
+    st.tilt += (wantTilt - st.tilt) * (1 - Math.exp(-dt / 0.7));
+
+    $('meterFill').style.width = (st.level * 100).toFixed(1) + '%';
+    $('calmMark').style.left = 'calc(' + (a * 100).toFixed(1) + '% - 2px)';
+  }
+
+  st.tick = update;
+
+  // ---------- Zeichnen ----------
+  // Feste Sprenkel für die Wildfarbe (immer gleich, damit nichts flimmert)
+  const BODY_SPOTS = [], HEAD_SPOTS = [];
+  (() => {
+    const rnd = mkRnd(7);
+    for (let n = 0; n < 22; n++) BODY_SPOTS.push({ i: 1 + Math.floor(rnd() * 22), o: rnd() * 1.5 - 0.75, r: 1.4 + rnd() * 2, light: rnd() < 0.35 });
+    while (HEAD_SPOTS.length < 13) {
+      const x = rnd() * 104 - 52, y = rnd() * 76 - 38;
+      if ((x * x) / (52 * 52) + (y * y) / (38 * 38) > 1) continue;
+      if (Math.hypot(x + 22, y + 6) < 20 || Math.hypot(x - 26, y + 6) < 20 || Math.hypot(x - 2, y - 20) < 20) continue;
+      HEAD_SPOTS.push({ x, y, r: 1.4 + rnd() * 2, light: rnd() < 0.35 });
+    }
+  })();
+  const spot = (x, y, r, light) => {
+    g.fillStyle = light ? 'rgba(196, 184, 110, 0.55)' : 'rgba(18, 18, 10, 0.6)';
+    g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  };
+  const shadow = (x, z, rx, ry, alpha) => {
+    g.fillStyle = 'rgba(60, 50, 20, ' + alpha.toFixed(3) + ')';
+    g.beginPath(); g.ellipse(x, gy(z), rx, ry, 0, 0, 7); g.fill();
+  };
+
+  // Wasser, Sandfläche mit Wellen und Kieseln, Lichtstrahlen
+  function drawScene() {
+    const bg = g.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#74d3e0'); bg.addColorStop(0.66, '#2b86a8'); bg.addColorStop(1, '#1b6f93');
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+
+    const sand = g.createLinearGradient(0, backY, 0, H);
+    sand.addColorStop(0, sandAt(0)); sand.addColorStop(1, sandAt(1));
+    g.fillStyle = sand;
+    g.beginPath(); g.moveTo(0, H); g.lineTo(0, backY);
+    for (let x = 0; x <= W + 40; x += 40) g.lineTo(x, backY + Math.sin(x / 150) * 4 * S);
+    g.lineTo(W, H); g.closePath(); g.fill();
+
+    // Sandwellen: nach hinten dichter und feiner
+    for (let i = 0; i < 10; i++) {
+      const z = Math.pow((i + 0.6) / 10, 1.5), k = S * zs(z), y0 = gy(z);
+      g.strokeStyle = 'rgba(150, 126, 80, ' + lerp(0.14, 0.26, z).toFixed(3) + ')';
+      g.lineWidth = 2 * k;
+      g.beginPath();
+      for (let x = -20; x <= W + 20; x += 24) g.lineTo(x, y0 + Math.sin(x / (70 * k) + i * 1.7) * 3.5 * k);
+      g.stroke();
+    }
+    for (const p of PEBBLES) {
+      const k = S * zs(p.z);
+      g.globalAlpha = lerp(0.55, 1, p.z);
+      g.fillStyle = p.c;
+      g.beginPath(); g.ellipse(p.fx * W, gy(p.z) + 2 * k, p.r * k * 1.3, p.r * k * 0.7, 0, 0, 7); g.fill();
+    }
+    g.globalAlpha = 1;
+
+    // Schatten und Sandhügel von Steinen und Pflanzen gehören zum Boden: Sie verdecken nie ein Tier
+    for (const r of ROCKS) { const k = S * zs(r.z); shadow(r.x + 14 * k, r.z, r.w * k * 0.6, 14 * k, 0.2); }
+    for (const c of PLANTS) {
+      const k = S * zs(c.z), cx = c.fx * W;
+      shadow(cx, c.z, c.n * 11 * k, 6 * k, 0.16);
+      g.fillStyle = sandAt(c.z);
+      g.beginPath(); g.ellipse(cx, gy(c.z) + 5 * k, c.n * 10 * k, 5 * k, 0, 0, 7); g.fill();
+    }
+
+    // Lichtstrahlen von oben, wandern sehr langsam
+    const yb = backY + (H - backY) * 0.55;
+    const ray = g.createLinearGradient(0, 0, 0, yb);
+    ray.addColorStop(0, 'rgba(255, 255, 255, 0.15)'); ray.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    g.fillStyle = ray;
+    for (let i = 0; i < 4; i++) {
+      const x = W * (0.1 + 0.25 * i) + Math.sin(st.time * 0.07 + i * 2.1) * 60 * S;
+      const wt = (50 + i * 18) * S, wb = wt * 2.4, sl = 150 * S;
+      g.beginPath(); g.moveTo(x, 0); g.lineTo(x + wt, 0); g.lineTo(x + sl + wb, yb); g.lineTo(x + sl, yb); g.closePath(); g.fill();
+    }
+  }
+
+  // Dunst zwischen den Ebenen: was weiter hinten liegt, wird bläulich und blasser
+  function drawFog(zb, alpha) {
+    const c = '84, 164, 190', y0 = gy(zb), y1 = y0 + (H - y0) * 0.6;
+    g.fillStyle = 'rgba(' + c + ', ' + alpha + ')';
+    g.fillRect(0, 0, W, y0);
+    const gr = g.createLinearGradient(0, y0, 0, y1);
+    gr.addColorStop(0, 'rgba(' + c + ', ' + alpha + ')'); gr.addColorStop(1, 'rgba(' + c + ', 0)');
+    g.fillStyle = gr; g.fillRect(0, y0, W, y1 - y0);
+  }
+
+  function drawMotes(front) {
+    g.fillStyle = '#fff';
+    for (const m of MOTES) {
+      if ((m.z >= 0.5) !== front) continue;
+      const k = S * zs(m.z);
+      g.globalAlpha = lerp(0.18, 0.5, m.z);
+      g.beginPath(); g.arc(m.fx * W, m.fy * (gy(m.z) - 20 * S) + Math.sin(st.time * 0.5 + m.ph) * 6 * S, 1.6 * k, 0, 7); g.fill();
+    }
+    g.globalAlpha = 1;
+  }
+
+  function drawShrimp(x, y, sc, dir, color, ph, alpha, pitch = 0) {
+    const v = typeof color === 'string' ? { base: color } : color;
+    // dir gleitet beim Wenden von -1 nach 1. In der Mitte der Drehung sieht man die Garnele kurz von vorn.
+    const fd = Math.abs(dir) < 0.1 ? (dir < 0 ? -0.1 : 0.1) : dir, turn = 1 - Math.min(1, Math.abs(fd));
+    const sw = Math.sin(ph * 0.35) * 2.5;
+    g.lineCap = 'round';
+    if (turn > 0.02) {
+      g.save();
+      g.translate(x, y); g.scale(sc, sc);
+      g.globalAlpha = alpha * Math.min(1, turn * 1.7);
+      g.strokeStyle = v.base;
+      for (const s of [-1, 1]) {
+        g.lineWidth = 1.6;
+        g.beginPath(); g.moveTo(s * 3, -7); g.quadraticCurveTo(s * 13, -22, s * 22, -13 + sw); g.stroke();
+        g.beginPath(); g.moveTo(s * 2, -5); g.quadraticCurveTo(s * 8, -12, s * 12, -4 - sw); g.stroke();
+        g.lineWidth = 2;
+        for (let j = 0; j < 3; j++) {
+          const lx = s * (3 + j * 2), sway = Math.sin(ph - j * 0.9) * 2.5;
+          g.beginPath(); g.moveTo(lx, 5); g.lineTo(lx + s * (3 + sway), 13); g.stroke();
+        }
+      }
+      g.fillStyle = v.base;
+      g.beginPath(); g.ellipse(0, -1, 8, 9, 0, 0, 7); g.fill();
+      if (v.band) { g.fillStyle = v.band; g.beginPath(); g.ellipse(0, 3, 7, 2.6, 0, 0, 7); g.fill(); }
+      if (v.stripe) { g.strokeStyle = v.stripe; g.lineWidth = 2.4; g.beginPath(); g.moveTo(0, -10); g.lineTo(0, -3); g.stroke(); }
+      for (const s of [-1, 1]) {
+        g.fillStyle = '#fff'; g.beginPath(); g.arc(s * 6.5, -6, 3.2, 0, 7); g.fill();
+        g.fillStyle = '#2a1a2e'; g.beginPath(); g.arc(s * 6.5, -6, 1.9, 0, 7); g.fill();
+      }
+      g.restore();
+    }
+    g.save();
+    g.translate(x, y); g.rotate(-pitch * Math.sign(fd)); g.scale(fd * sc, sc);
+    g.globalAlpha = alpha * Math.min(1, Math.abs(fd) * 1.7);
+    g.strokeStyle = v.base; g.lineWidth = 1.6;
+    // lange Fühler wehen nach hinten, kurze zeigen nach vorn
+    g.beginPath(); g.moveTo(21, -6); g.quadraticCurveTo(34, -22, 2, -20 + sw); g.stroke();
+    g.beginPath(); g.moveTo(21, -5); g.quadraticCurveTo(36, -16, 8, -15 - sw); g.stroke();
+    g.beginPath(); g.moveTo(22, -3); g.quadraticCurveTo(32, -4, 38, -1 + sw * 0.5); g.stroke();
+    // Laufbeine angelegt
+    g.lineWidth = 1.8;
+    g.beginPath();
+    for (let j = 0; j < 3; j++) { const bx = 14 - j * 4; g.moveTo(bx, 3); g.lineTo(bx - 6, 8); }
+    g.stroke();
+    // Schwimmbeinchen schlagen in einer Welle von vorn nach hinten
+    g.lineWidth = 2.6;
+    g.beginPath();
+    for (let j = 0; j < 5; j++) {
+      const t = (j + 0.5) / 5, bx = 3 - j * 5, by = 2 + t * t * 4;
+      const ang = Math.PI / 2 + 0.25 + Math.sin(ph - j * 0.9) * 0.95;
+      g.moveTo(bx, by); g.lineTo(bx + Math.cos(ang) * 10, by + Math.sin(ang) * 10);
+    }
+    g.stroke();
+    g.fillStyle = v.band || v.base;
+    g.beginPath(); g.moveTo(-17, 2); g.lineTo(-33, -3); g.lineTo(-33, 10); g.lineTo(-20, 8); g.closePath(); g.fill();
+    for (let i = 5; i >= 0; i--) {
+      const t = i / 5;
+      g.fillStyle = v.band && i % 2 === 1 ? v.band : v.base;   // Bänder: Segmente abwechselnd gefärbt
+      g.beginPath(); g.ellipse(14 - t * 32, -2 + t * t * 5, 9 - t * 4, 7 - t * 3.5, 0, 0, 7); g.fill();
+    }
+    g.fillStyle = v.base;
+    g.beginPath(); g.ellipse(13, -3, 10, 7.5, 0, 0, 7); g.fill();
+    g.beginPath(); g.moveTo(20, -8); g.lineTo(32, -8); g.lineTo(21, -2); g.closePath(); g.fill();
+    if (v.band) { g.fillStyle = v.band; g.beginPath(); g.ellipse(8, -4, 3.5, 6.5, 0, 0, 7); g.fill(); }
+    if (v.stripe) {                                            // heller Strich auf dem Rücken
+      g.strokeStyle = v.stripe; g.lineWidth = 2.4;
+      g.beginPath(); g.moveTo(17, -10); g.quadraticCurveTo(0, -11, -17, -1); g.stroke();
+    }
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(18, -6, 3.2, 0, 7); g.fill();
+    g.fillStyle = '#2a1a2e'; g.beginPath(); g.arc(18.6, -6, 1.9, 0, 7); g.fill();
+    g.restore();
+  }
+
+  function drawPlant(c) {
+    const a = st.unruhe, k = S * zs(c.z), base = gy(c.z) + 3 * k, n = 26;
+    const cx = c.fx * W, amp = 5 + 12 * a + 34 * c.e, wamp = 9 + 5 * a + 14 * c.e;
+    g.globalAlpha = 0.93;
+    for (const b of c.blades) {
+      const Hb = Math.min(plantHeight(c) * b.hf * zs(c.z), base - 30 * S), L = [], R = [];
+      for (let j = 0; j <= n; j++) {
+        const t = j / n;
+        // Neigung des ganzen Halms plus Schlängelwellen, die langsam nach oben laufen
+        const lean = (Math.sin(c.ph * 0.6 + b.ph) * amp + c.k) * Math.pow(t, 1.5);
+        const wave = Math.sin(t * (2.2 + b.wv) * Math.PI * 2 - c.ph * 1.3 + b.ph) * wamp * (0.2 + 0.8 * t);
+        const x = cx + b.ox * k + (lean + wave) * k, y = base - t * Hb;
+        const w = b.w * k * (1 - 0.75 * t) / 2 * (1 + 0.22 * Math.sin(t * 15 + b.ph));   // leicht welliger Rand
+        L.push([x - w, y]); R.push([x + w, y]);
+      }
+      g.fillStyle = b.col;
+      g.beginPath();
+      for (const [x, y] of L) g.lineTo(x, y);
+      for (let j = n; j >= 0; j--) g.lineTo(R[j][0], R[j][1]);
+      g.closePath(); g.fill();
+    }
+    g.globalAlpha = 1;
+    g.fillStyle = sandAt(c.z);                  // nur ein schmaler Sandrand direkt an den Halmen
+    g.beginPath(); g.ellipse(cx, base + 1.5 * k, c.n * 7.5 * k, 2.4 * k, 0, 0, 7); g.fill();
+  }
+
+  function drawRock(r) {
+    const k = S * zs(r.z), w = r.w * k, h = r.h * k, base = gy(r.z) + 6 * k;
+    g.fillStyle = '#4a3b38';
+    g.beginPath();
+    for (const [sx, syy] of r.shape) g.lineTo(r.x + sx * w, base - syy * h);
+    g.closePath(); g.fill();
+    for (const [px, py, pr, light] of r.pores) {
+      g.fillStyle = light ? 'rgba(126, 102, 94, 0.6)' : 'rgba(24, 16, 16, 0.55)';
+      g.beginPath(); g.ellipse(r.x + px * w, base - py * h, pr * k, pr * k * 0.8, 0, 0, 7); g.fill();
+    }
+    g.fillStyle = sandAt(r.z);                  // Sand am Fuß des Steins
+    g.beginPath(); g.ellipse(r.x, base + 2 * k, w * 0.56, 6 * k, 0, 0, 7); g.fill();
+    caves.forEach((c, i) => {
+      if (c.z !== r.z || Math.abs(c.x - r.x) > w) return;
+      const cy = sy(c.h, c.z);
+      const hole = sc => { g.beginPath(); for (const [px, py] of c.pts) g.lineTo(c.x + px * c.rx * sc, cy + py * c.ry * sc); g.closePath(); };
+      g.fillStyle = '#2f2325'; hole(1.2); g.fill();            // dunkler Rand im Gestein
+      g.fillStyle = '#1c1315'; hole(1.05); g.fill();
+      g.fillStyle = '#0b0607'; hole(0.88); g.fill();           // innen fast schwarz
+      const inside = st.shrimp.filter(p => p.state === 'hidden' && p.cave === i);
+      if (inside.length) {
+        g.save();
+        hole(1.05); g.clip();
+        inside.forEach((p, j) => drawShrimp(c.x - p.dir * 10 * k, cy + (4 - j * 9) * k, k * 0.5, p.dir, p.color, p.ph, 1));
+        g.fillStyle = 'rgba(11, 6, 7, 0.28)';
+        g.fillRect(c.x - c.rx * 1.3, cy - c.ry * 1.3, c.rx * 2.6, c.ry * 2.6);
+        g.restore();
+      }
+      // Überhang aus Gestein oben, Sand läuft unten ein Stück hinein
+      g.fillStyle = '#4a3b38';
+      g.beginPath(); g.ellipse(c.x + c.rx * 0.1, cy - c.ry * 1.12, c.rx * 1.15, c.ry * 0.3, -0.08, 0, 7); g.fill();
+      g.fillStyle = 'rgba(126, 102, 94, 0.45)';
+      g.beginPath(); g.ellipse(c.x - c.rx * 0.2, cy - c.ry * 1.2, c.rx * 0.5, c.ry * 0.12, -0.1, 0, 7); g.fill();
+      g.fillStyle = sandAt(c.z);
+      g.beginPath(); g.ellipse(c.x, cy + c.ry * 0.95, c.rx * 0.95, c.ry * 0.34, 0, 0, 7); g.fill();
+    });
+  }
+
+  function drawFreeShrimp(p) {
+    const k = S * zs(p.z), up = clamp(p.h / (300 * S));
+    shadow(p.x, p.z, lerp(20, 12, up) * k, lerp(5, 3, up) * k, lerp(0.2, 0.05, up));
+    const bob = Math.sin(p.ph * 0.45) * 2.5 * S * clamp((p.h - shrimpH()) / (20 * S));
+    drawShrimp(p.x, sy(p.h, p.z) + bob, k * 0.75, p.face === undefined ? p.dir : p.face, p.color, p.ph, 1, p.pitch || 0);
+  }
+
+  // Sog: eingesaugte Garnele, Strömungslinien, Bläschen und Sandwolken – in der Tiefe des Axolotls
+  function drawFx() {
+    const k = S * zs(st.z);
+    if (st.suck) { const p = st.suck.p; drawShrimp(p.x, sy(p.h, p.z), 0.75 * S * zs(p.z) * p.sc, p.face === undefined ? p.dir : p.face, p.color, p.ph, p.al); }
+    if (st.flow.length && st.flowDir) {
+      const m = mouthPos(), mx = m.x, my = sy(m.h, m.z), d = st.flowDir, L = Math.max(d.len + 60 * k, 200 * k), W0 = 80 * k;
+      const pos = (u, off) => { const r = L * (1 - u), w = off * W0 * Math.pow(1 - u, 1.2); return [mx + d.ux * r - d.uy * w, my + d.uy * r + d.ux * w]; };
+      g.lineCap = 'round';
+      for (const f of st.flow) {
+        const al = Math.min(1, Math.sin(Math.PI * clamp(f.u)) * 1.1) * 0.9 * st.mouth;
+        if (al < 0.02) continue;
+        g.strokeStyle = 'rgba(255, 255, 255, ' + al.toFixed(3) + ')';
+        const [x1, y1] = pos(f.u, f.off);
+        g.beginPath();
+        if (f.bub) { g.lineWidth = 1.5 * k; g.arc(x1, y1, 3 * k, 0, 7); }
+        else { const [x0, y0] = pos(Math.max(0, f.u - 0.06 - 0.1 * f.u), f.off); g.lineWidth = 3 * k; g.moveTo(x0, y0); g.lineTo(x1, y1); }
+        g.stroke();
+      }
+    }
+    for (const b of st.bubbles) {
+      if (b.t <= 0) continue;
+      g.strokeStyle = 'rgba(255, 255, 255, ' + (0.8 * (1 - b.t / 2.2)).toFixed(3) + ')';
+      g.lineWidth = 1.5 * k;
+      g.beginPath(); g.arc(b.x, sy(b.h, b.z), b.r * zs(b.z), 0, 7); g.stroke();
+    }
+    for (const f of st.puffs) {
+      g.fillStyle = 'rgba(214, 190, 130, ' + (0.4 * (1 - f.t / 3)).toFixed(3) + ')';
+      g.beginPath(); g.arc(f.x, sy(f.h, f.z), f.r * zs(f.z), 0, 7); g.fill();
+    }
+  }
+
+  function drawMurk() {
+    if (st.murk < 0.005) return;
+    g.fillStyle = 'rgba(122, 104, 62, ' + (0.62 * st.murk).toFixed(3) + ')';
+    g.fillRect(0, 0, W, H);
+  }
+
+  // Anzeige oben rechts: Wie viele Garnelen sind noch da?
+  function drawCounter() {
+    const n = st.shrimp.length;
+    if (!n) return;
+    const sc = Math.max(0.42, S * 0.5), step = 82 * sc, h = 44 * sc + 14;
+    const x0 = W - 16 - step * n - 12, y0 = 14;
+    g.fillStyle = 'rgba(253, 248, 238, 0.4)';
+    g.beginPath();
+    if (g.roundRect) g.roundRect(x0, y0, step * n + 12, h, h / 2); else g.rect(x0, y0, step * n + 12, h);
+    g.fill();
+    st.shrimp.forEach((p, i) => {
+      const there = p.state !== 'gone';        // da: farbig, versteckt: blass, gefressen: grau
+      drawShrimp(x0 + 6 + step * (i + 0.5) - 3 * sc, y0 + h / 2 + 5 * sc, sc, 1, there ? p.color : '#5d7780', 0,
+                 !there ? 0.3 : p.state === 'hidden' ? 0.4 : 1);
+    });
+  }
+
+  function drawAxolotl() {
+    const a = st.unruhe, k = S * zs(st.z), y = sy(st.h, st.z);
+    const sad = st.sad, face = st.face;
+    // Schatten auf dem Sand in seiner Tiefe; je höher er schwimmt, desto blasser
+    const up = clamp((st.h - homeH()) / (H * 0.5));
+    shadow(st.x - face * 90 * k, st.z, lerp(150, 100, up) * k, lerp(16, 9, up) * k, lerp(0.22, 0.06, up));
+
+    g.save();
+    g.translate(st.x, y);
+    g.scale(k, k);
+    const breathe = 1 + Math.sin(st.breath) * 0.015;
+    g.scale(1, breathe);
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    // Körper: schwenkt beim Richtungswechsel sichtbar um den Kopf herum auf die andere Seite
+    g.save();
+    g.rotate(st.tilt * face);
+
+    // Wirbelsäule vom Kopf nach hinten
+    const N = 26, P = [];
+    const turning = Math.min(1, Math.abs(st.yaw - face));        // Kopf ist dem Körper beim Wenden voraus
+    const amp = (lerp(1.5, 24, a) + 16 * (1 - Math.abs(face))) * lerp(0.65, 1.15, clamp(st.thrust));   // kräftiger Schlag beim Stoß, ruhig beim Gleiten
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      P.push({
+        // Beim Wenden zeigt der Körper kurz vom Betrachter weg: Er wird kürzer und hebt sich hinter dem Kopf
+        x: (-20 - t * 235) * face,
+        y: 10 + amp * Math.pow(t, 1.3) * Math.sin(st.tail - t * 5) - 34 * turning * t * t - 46 * (1 - Math.abs(face)) * Math.pow(t, 0.8),
+        w: 4 + 27 * Math.pow(1 - t, 0.75),
+        t
+      });
+    }
+    // Breite immer quer zur Körperlinie, damit der Körper in jeder Drehstellung eine Form behält
+    for (let i = 0; i <= N; i++) {
+      const p0 = P[Math.max(0, i - 1)], p1 = P[Math.min(N, i + 1)];
+      const ddx = p1.x - p0.x, ddy = p1.y - p0.y, l = Math.hypot(ddx, ddy) || 1;
+      let nx = -ddy / l, ny = ddx / l;
+      if (ny > 0) { nx = -nx; ny = -ny; }
+      P[i].nx = nx; P[i].ny = ny;
+    }
+    const outline = extra => {
+      g.beginPath();
+      for (let i = 0; i <= N; i++) { const p = P[i], e = p.w + extra(p.t); g.lineTo(p.x + p.nx * e, p.y + p.ny * e); }
+      for (let i = N; i >= 0; i--) { const p = P[i], e = p.w + extra(p.t) * 0.7; g.lineTo(p.x - p.nx * e, p.y - p.ny * e); }
+      g.closePath();
+    };
+    const leg = (idx, phase, color) => {
+      const p = P[idx];
+      const swing = Math.sin(st.leg + phase) * lerp(0.08, 0.6, clamp(a * 1.4));
+      const ang = lerp(Math.PI / 2 + 0.35 + swing, Math.PI - 0.3 + swing * 0.25, st.tuck);   // angelegt beim Schwimmen
+      const x0 = p.x, y0 = p.y + p.w * 0.6, x1 = x0 + Math.cos(ang) * 24 * face, y1 = y0 + Math.sin(ang) * 24;
+      g.strokeStyle = color; g.lineWidth = 12;
+      g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+      // Fuß wie beim echten Axolotl: vorn vier, hinten fünf schlanke, spitz zulaufende Zehen in Körperfarbe,
+      // am Ansatz kleine Schwimmhäute, an der Spitze eine winzige helle Kralle
+      const nt = idx > 8 ? 5 : 4, mid = (nt - 1) / 2, toes = [];
+      for (let j = 0; j < nt; j++) {
+        const ta = ang - 0.3 + (j - mid) * 0.36;
+        toes.push({ cx: Math.cos(ta) * face, cy: Math.sin(ta), len: 19 * (1 - 0.1 * Math.abs(j - mid)) });
+      }
+      g.fillStyle = color; g.globalAlpha = 0.6;
+      g.beginPath(); g.moveTo(x1, y1);
+      for (const tt of toes) g.lineTo(x1 + tt.cx * tt.len * 0.6, y1 + tt.cy * tt.len * 0.6);
+      g.closePath(); g.fill();
+      g.globalAlpha = 1;
+      for (const tt of toes) {
+        const ex = x1 + tt.cx * tt.len, ey = y1 + tt.cy * tt.len, px = -tt.cy, py = tt.cx;   // quer zur Zehe
+        g.fillStyle = color;
+        g.beginPath();
+        g.moveTo(x1 + px * 2.7, y1 + py * 2.7); g.lineTo(ex + px * 0.8, ey + py * 0.8);
+        g.lineTo(ex - px * 0.8, ey - py * 0.8); g.lineTo(x1 - px * 2.7, y1 - py * 2.7);
+        g.closePath(); g.fill();
+        // Kralle: kurz und spitz, die Farbe läuft vom Körperton ins Weißliche
+        const bx = x1 + tt.cx * (tt.len - 3.5), by = y1 + tt.cy * (tt.len - 3.5), qx = ex + tt.cx * 2.6, qy = ey + tt.cy * 2.6;
+        const gr = g.createLinearGradient(bx, by, qx, qy);
+        gr.addColorStop(0, color); gr.addColorStop(1, '#fffaf2');
+        g.fillStyle = gr;
+        g.beginPath(); g.moveTo(bx + px * 1.3, by + py * 1.3); g.lineTo(qx, qy); g.lineTo(bx - px * 1.3, by - py * 1.3); g.closePath(); g.fill();
+      }
+      g.fillStyle = color;
+      g.beginPath(); g.arc(x1, y1, 6.5, 0, 7); g.fill();
+    };
+
+    leg(3, 0, C.dark); leg(13, Math.PI, C.dark);                 // hintere Beine
+    g.fillStyle = C.fin; outline(t => 15 * Math.sin(Math.PI * clamp((t - 0.2) / 0.8))); g.fill();
+    g.fillStyle = C.body; outline(() => 0); g.fill();
+    if (C.spots) for (const s of BODY_SPOTS) { const p = P[s.i]; spot(p.x, p.y + s.o * p.w, s.r, s.light); }
+    leg(4, Math.PI, C.body); leg(14, 0, C.body);                  // vordere Beine
+    g.restore();
+    // Kopf: neigt sich mit, pendelt leicht gegen den Schwanzschlag und dreht sich in die Schwimmrichtung
+    g.rotate(st.tilt * face + Math.sin(st.tail) * 0.035 * lerp(0.3, 1, a));
+    const yw = st.yaw * 0.75;
+
+    // Kiemen
+    // Kiemen: geschwungene, spitz zulaufende Äste mit federartigen Fäden an der Unterseite
+    const sway = lerp(0.04, 0.38, a);
+    const gill = (bx, by, deg, kk, side) => {
+      const ang = deg * Math.PI / 180 + Math.sin(st.gill + kk * 0.9) * sway + side * 0.4 * sad;   // hängen bei trübem Wasser
+      const L = [44, 54, 47][kk % 3] * (1 - 0.24 * yw * side), ux = Math.cos(ang), uy = Math.sin(ang);   // abgewandte Seite wirkt kürzer
+      let nx = uy, ny = -ux; if (ny > 0) { nx = -nx; ny = -ny; }                                  // zeigt nach oben
+      const cxp = bx + ux * L * 0.5 - nx * L * 0.2, cyp = by + uy * L * 0.5 - ny * L * 0.2;        // Ast biegt sich nach oben
+      const ex = bx + ux * L + nx * L * 0.16, ey = by + uy * L + ny * L * 0.16;
+      const at = t => { const m = 1 - t; return [m * m * bx + 2 * m * t * cxp + t * t * ex, m * m * by + 2 * m * t * cyp + t * t * ey]; };
+      g.strokeStyle = C.gillLight; g.lineWidth = 2.2;
+      for (let j = 1; j <= 10; j++) {
+        const t = j / 11, [px, py] = at(t), len = 15 * (1 - 0.55 * t);
+        const wob = Math.sin(st.gill * 1.3 + j * 0.7 + kk) * (0.15 + 0.3 * a);
+        const fx = -nx * Math.cos(wob) + ux * (0.35 + Math.sin(wob)), fy = -ny * Math.cos(wob) + uy * (0.35 + Math.sin(wob));
+        g.beginPath(); g.moveTo(px, py);
+        g.quadraticCurveTo(px + fx * len * 0.5 + ux * 2, py + fy * len * 0.5 + uy * 2, px + fx * len, py + fy * len); g.stroke();
+        if (j % 2 === 0) { g.beginPath(); g.moveTo(px, py); g.lineTo(px + (nx + ux * 0.5) * len * 0.4, py + (ny + uy * 0.5) * len * 0.4); g.stroke(); }
+      }
+      g.fillStyle = C.gill;
+      g.beginPath();
+      const n = 8, top = [], bot = [];
+      for (let j = 0; j <= n; j++) { const t = j / n, [px, py] = at(t), w = 4.6 * (1 - t) + 0.9; top.push([px + nx * w, py + ny * w]); bot.push([px - nx * w, py - ny * w]); }
+      for (const [px, py] of top) g.lineTo(px, py);
+      for (let j = n; j >= 0; j--) g.lineTo(bot[j][0], bot[j][1]);
+      g.closePath(); g.fill();
+    };
+    [-170, -146, -120].forEach((d, kk) => gill(-44, -12 + kk * -6, d, kk, -1));
+    [-10, -34, -60].forEach((d, kk) => gill(44, -12 + kk * -6, d, kk + 3, 1));
+
+    // Kopf
+    g.fillStyle = C.body;
+    g.beginPath(); g.ellipse(0, 0, 60, 45, 0, 0, 7); g.fill();
+    if (C.spots) for (const s of HEAD_SPOTS) spot(s.x, s.y, s.r, s.light);
+    // Gesicht wandert auf dem Kopf zur Seite: Dreiviertelansicht in Schwimmrichtung, gleitet beim Wenden hinüber
+    g.save();
+    g.translate(16 * yw, 0); g.scale(1 - 0.12 * Math.abs(yw), 1);
+    const puff = Math.sin(Math.PI * clamp(st.gulp / 1.2));     // dicke Backen beim Schlucken
+    g.fillStyle = C.body;
+    g.beginPath(); g.ellipse(-46, 14, 16 * puff, 14 * puff, 0, 0, 7); g.fill();
+    g.beginPath(); g.ellipse(46, 14, 16 * puff, 14 * puff, 0, 0, 7); g.fill();
+    g.fillStyle = C.cheek;
+    g.beginPath(); g.ellipse(-38, 14, 10 + 4 * puff, 6 + 3 * puff, 0, 0, 7); g.fill();
+    g.beginPath(); g.ellipse(38, 14, 10 + 4 * puff, 6 + 3 * puff, 0, 0, 7); g.fill();
+
+    // Augen: geschlossen in Ruhe, groß und weiß bei Unruhe
+    const open = Math.max(smooth(0.03, 0.14, a), sad);
+    const white = smooth(0.2, 0.55, a);
+    const pr = lerp(6, 8.5, a), wr = lerp(7, 19, a);
+    let lx = 0, ly = 0;                       // Blick zur nächsten Garnele
+    if (st.prey) {
+      const dx = st.prey.x - st.x, dy = sy(st.prey.h, st.prey.z) - y, d = Math.hypot(dx, dy) || 1;
+      const m = 4.5 * smooth(0.2, 0.4, a);
+      lx = dx / d * m; ly = dy / d * m;
+    }
+    if (sad > 0) { lx *= 1 - sad * (1 - smooth(0.3, 0.6, a)); ly = lerp(ly, 3.5, sad * (1 - smooth(0.3, 0.6, a))); }   // Blick gesenkt
+    for (const ex of [-24, 24]) {
+      if (open < 0.12) {
+        g.strokeStyle = C.line; g.lineWidth = 3.5;
+        g.beginPath(); g.arc(ex, -8, 7, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
+      } else {
+        if (white > 0.01) {
+          g.fillStyle = 'rgba(255,255,255,' + white + ')';
+          g.beginPath(); g.arc(ex, -6, wr, 0, 7); g.fill();
+        }
+        if (C.ring) { g.fillStyle = C.ring; g.beginPath(); g.ellipse(ex + lx, -6 + ly, pr + 2.5, (pr + 2.5) * open, 0, 0, 7); g.fill(); }
+        g.fillStyle = C.eye;
+        g.beginPath(); g.ellipse(ex + lx, -6 + ly, pr, pr * open, 0, 0, 7); g.fill();
+        g.fillStyle = 'rgba(255,255,255,0.9)';
+        g.beginPath(); g.arc(ex + lx + 2.5, -8.5 + ly, pr * 0.3 * open, 0, 7); g.fill();
+      }
+    }
+
+    // Mund: Lächeln in Ruhe, kleines „o“ bei Unruhe
+    const o = smooth(0.55, 0.85, a), mo = st.mouth;
+    g.strokeStyle = C.line; g.lineWidth = 3;
+    if (mo > 0.05) {                            // saugt: Maul weit, rund und schwarz
+      g.fillStyle = '#150a10';
+      g.beginPath(); g.ellipse(2, 22, 6 + 9 * mo, 4 + 11 * mo, 0, 0, 7); g.fill();
+    } else if (st.gulp > 0) {                   // schluckt: Maul zu
+      g.beginPath(); g.moveTo(-7, 21); g.lineTo(11, 21); g.stroke();
+    } else if (o < 0.05) {
+      const wdt = lerp(16, 9, smooth(0.2, 0.55, a));
+      // Mund geht stufenlos vom Lächeln über gerade bis zu hängenden Mundwinkeln
+      const mw = wdt * 0.88, depth = mw * 0.6, bend = 1 - 2 * sad;            // 1 = Lächeln, -1 = traurig
+      const ey = 20 + depth * 0.9 * sad;
+      g.beginPath(); g.moveTo(-mw, ey); g.quadraticCurveTo(0, ey + 2 * depth * bend, mw, ey); g.stroke();
+    } else {
+      g.fillStyle = C.mouth;
+      g.beginPath(); g.ellipse(2, 22, 7, 2 + 7 * o, 0, 0, 7); g.fill();
+    }
+    g.restore();
+    g.restore();
+  }
+
+  // Alles nach Tiefe sortiert von hinten nach vorne zeichnen
+  const FOG = [[0.25, 0.14], [0.45, 0.09]];
+  function draw() {
+    drawScene();
+    drawMotes(false);
+    const items = [];
+    for (const r of ROCKS) items.push({ z: r.z, f: () => drawRock(r) });
+    for (const c of PLANTS) items.push({ z: c.z, f: () => drawPlant(c) });
+    for (const p of st.shrimp) if (p.state === 'free' || p.state === 'flee') items.push({ z: p.z, f: () => drawFreeShrimp(p) });
+    items.push({ z: st.z, f: () => { drawAxolotl(); drawFx(); } });   // immer nach der echten Tiefe einsortiert
+    items.sort((p, q) => p.z - q.z);
+    let fog = 0;
+    for (const it of items) {
+      while (fog < FOG.length && it.z > FOG[fog][0]) { drawFog(FOG[fog][0], FOG[fog][1]); fog++; }
+      it.f();
+    }
+    while (fog < FOG.length) { drawFog(FOG[fog][0], FOG[fog][1]); fog++; }
+    drawMotes(true);
+    drawMurk();
+    drawCounter();
+  }
+
+  // ---------- Schleife ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
