@@ -42,10 +42,27 @@
   #start .hint { font-size: 14px; color: #55707d; margin: 18px 0 0; }
   #classRow { margin: 0 0 20px; }
   #classRow label { display: block; font-weight: 600; font-size: 16px; margin-bottom: 6px; }
+  /* Die ganze Fläche öffnet die Auswahl; der Pfeil ist groß und sitzt mit Abstand zum Rand */
   #classRow select {
-    font: inherit; font-size: 18px; padding: 10px 14px; border-radius: 14px; border: 2px solid #b9c6c9;
-    background: #fff; color: inherit; min-width: 240px; max-width: 100%; min-height: 48px;
+    -webkit-appearance: none; appearance: none; cursor: pointer; display: block; width: 100%; box-sizing: border-box;
+    font: inherit; font-size: 19px; font-weight: 600; text-align: left;
+    padding: 12px 60px 12px 18px; border-radius: 16px; border: 2px solid #7fa6b3; min-height: 56px; color: inherit;
+    background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 9l7 7 7-7' fill='none' stroke='%2312303f' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 18px center / 26px 26px;
   }
+  #classRow select:hover, #classRow select:focus-visible { border-color: #1b6f93; outline: none; box-shadow: 0 0 0 3px rgba(27,111,147,0.25); }
+  #classRow select:disabled { cursor: default; opacity: 0.75; background-image: none; }
+
+  /* Fortsetzen in der laufenden Sitzung (Mikrofon oder Ton wurde vom Browser angehalten) */
+  #resume {
+    position: fixed; inset: 0; z-index: 11; display: flex; align-items: center; justify-content: center;
+    background: rgba(8, 48, 70, 0.45); padding: 16px;
+  }
+  #resume[hidden] { display: none; }
+  #resume .card {
+    background: #fdf8ee; border-radius: 24px; padding: 24px 30px; max-width: 460px; text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  }
+  #resume p { margin: 0 0 16px; font-size: 18px; line-height: 1.4; }
   #error { display: none; background: #ffe3e0; color: #8a1f14; border-radius: 12px; padding: 12px 14px; font-size: 16px; margin: 0 0 18px; }
   button {
     font: inherit; cursor: pointer; border: none; border-radius: 999px;
@@ -234,6 +251,13 @@
   </div>
 </div>
 
+<div id="resume" hidden>
+  <div class="card" role="dialog" aria-labelledby="resumeText">
+    <p id="resumeText">Die Messung wurde unterbrochen. Eure Sitzung ist noch da. Solange zählt nichts mit.</p>
+    <button class="primary" id="btnResume">Fortsetzen</button>
+  </div>
+</div>
+
 <div id="rotate"><div><span class="icon" aria-hidden="true">↻</span><p>Bitte das Tablet quer drehen</p></div></div>
 
 <script>
@@ -296,7 +320,7 @@
   }
 
   // ---------- Ton ----------
-  let analyser = null, buf = null, demoMode = false, running = false, audioCtx = null;
+  let analyser = null, buf = null, demoMode = false, running = false, audioCtx = null, bgPow = null;
 
   // ---------- Tablet ----------
   const isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
@@ -309,33 +333,124 @@
     if (!('wakeLock' in navigator)) { if (isTouch) $('sleepHint').hidden = false; return; }
     try { if (document.visibilityState === 'visible') wake = await navigator.wakeLock.request('screen'); } catch { /* z. B. Stromsparmodus */ }
   }
-  // Nach App-Wechsel oder Entsperren: Bildschirm wieder wach halten und Tonmessung fortsetzen
+  // Kleines Protokoll technischer Ereignisse (nur im Speicher, ohne persönliche Daten), hilft bei der Fehlersuche
+  const diag = [];
+  const note = what => { diag.push({ t: Math.round(performance.now() / 1000), what }); if (diag.length > 60) diag.shift(); };
+
+  // Drei Dinge werden getrennt behandelt:
+  //   Sichtbarkeit   – der Tab ist im Hintergrund: Die Sitzung läuft weiter, es wird nichts zurückgesetzt.
+  //   Ton-Kontext    – der Browser hat den Ton angehalten: wieder aufnehmen, notfalls mit einem Tipp der Lehrkraft.
+  //   Mikrofon       – die Aufnahme wurde beendet oder stummgeschaltet: neu anschließen, die Sitzung bleibt bestehen.
+  // Solange nicht wirklich gemessen wird, zählt die Statistik nicht.
+  let micDown = false, micMuted = false;
+  const measuring = () => demoMode || (!!analyser && !micDown && !micMuted && !!audioCtx && audioCtx.state === 'running');
+  const showResume = show => { $('resume').hidden = !show; };
+
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible' || !running) return;
+    if (document.visibilityState !== 'visible') { saveSes(); return; }       // beim Verlassen nur den Stand sichern
+    if (!running) return;
     keepAwake();
-    if (audioCtx && audioCtx.state !== 'running') audioCtx.resume().catch(() => {});
+    note('sichtbar');
+    checkAudio();
   });
-  // Hat das Tablet das Mikrofon beendet, wieder den Startknopf zeigen
+  // Ton-Kontext und Mikrofon prüfen und wenn nötig ohne Nachfrage wieder in Gang bringen
+  async function checkAudio() {
+    if (demoMode || !running) return;
+    if (audioCtx && audioCtx.state !== 'running') {
+      await wakeAudio(audioCtx);
+      if (audioCtx.state !== 'running') { note('ton-angehalten'); showResume(true); return; }
+    }
+    const tracks = micStream ? micStream.getAudioTracks() : [];
+    if (!tracks.length || tracks.every(t => t.readyState === 'ended')) micLost();
+    else if (!micDown) showResume(false);
+  }
+  // Das Mikrofon wurde beendet: Die Sitzung bleibt, wie sie ist. Erst still neu anschließen;
+  // verlangt der Browser eine neue Freigabe, erscheint ein Fortsetzen-Knopf in der laufenden Sitzung.
   function micLost() {
-    if (demoMode) return;
-    running = false; analyser = null;
-    const err = $('error');
-    err.textContent = 'Das Mikrofon wurde unterbrochen. Bitte noch einmal starten.';
-    err.style.display = 'block';
-    $('panel').style.display = 'none';
-    $('start').style.display = 'flex';
+    if (demoMode || micDown) return;
+    micDown = true;
+    note('mikrofon-beendet');
+    reconnectMic();
+  }
+  async function reconnectMic() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      });
+      const ac = getCtx();
+      await wakeAudio(ac);
+      useMicStream(stream);
+      micEc = false; setMicEcho(sndAny());
+      micDown = false; micMuted = false;
+      showResume(ac.state !== 'running');
+      note('mikrofon-wieder-da');
+    } catch {
+      note('mikrofon-braucht-freigabe');
+      showResume(true);
+    }
   }
 
-  const getCtx = () => audioCtx || (audioCtx = new (window.AudioContext || window.webkitAudioContext)());
+  // Ton-Kontext aufwecken. Ohne Tipp der Lehrkraft lässt der Browser das manchmal nicht zu – dann nicht hängen bleiben.
+  const wakeAudio = ac => Promise.race([ac.resume().catch(() => {}), new Promise(r => setTimeout(r, 700))]);
+  const getCtx = () => {
+    if (!audioCtx) {
+      // Großer Ton-Puffer: Die Klänge müssen nicht auf die Millisekunde genau sein. Dafür bleiben sie flüssig,
+      // auch wenn das Gerät stark beschäftigt ist (zum Beispiel beim Übertragen des Bildschirms mit AirPlay).
+      const AC = window.AudioContext || window.webkitAudioContext;
+      try { audioCtx = new AC({ latencyHint: 'playback' }); } catch { audioCtx = new AC(); }
+      note('ton-puffer-' + Math.round((audioCtx.baseLatency || 0) * 1000) + 'ms');
+      audioCtx.addEventListener('statechange', () => { note('ton-' + audioCtx.state); if (audioCtx.state !== 'running' && document.visibilityState === 'visible') checkAudio(); });
+    }
+    return audioCtx;
+  };
   let micStream = null, micSrc = null, micEc = false;
+  const onMute = () => { micMuted = true; note('mikrofon-stumm'); };
+  const onUnmute = () => { micMuted = false; note('mikrofon-laut'); };
   // Mikrofon an die Messung anschließen; ein vorheriges Mikrofon wird sauber abgelöst
   function useMicStream(stream) {
-    if (micStream) micStream.getAudioTracks().forEach(t => { t.removeEventListener('ended', micLost); t.stop(); });
+    if (micStream) micStream.getAudioTracks().forEach(t => {
+      t.removeEventListener('ended', micLost); t.removeEventListener('mute', onMute); t.removeEventListener('unmute', onUnmute); t.stop();
+    });
     if (micSrc) { try { micSrc.disconnect(); } catch { /* schon getrennt */ } }
     micStream = stream;
     micSrc = getCtx().createMediaStreamSource(stream);
     micSrc.connect(analyser);
-    stream.getAudioTracks().forEach(t => t.addEventListener('ended', micLost));
+    if (meterNode) micSrc.connect(meterNode);
+    stream.getAudioTracks().forEach(t => {
+      t.addEventListener('ended', micLost); t.addEventListener('mute', onMute); t.addEventListener('unmute', onUnmute);
+      micMuted = t.muted;
+    });
+  }
+
+  // Taktgeber aus dem Ton: Der Browser hält Animationen an, sobald der Tab im Hintergrund ist. Der Ton läuft aber weiter.
+  // Deshalb liefert ein kleiner Messbaustein etwa elfmal pro Sekunde die Lautstärke des Mikrofons. Ist der Tab
+  // nicht sichtbar, treibt dieser Takt Messung und Statistik weiter an (siehe Schleife ganz unten).
+  let meterNode = null, onMeter = () => {};
+  async function ensureMeter(ac) {
+    if (meterNode) return;
+    const sink = ac.createGain(); sink.gain.value = 0; sink.connect(ac.destination);    // stumm, hält den Baustein am Laufen
+    try {
+      const code = "class M extends AudioWorkletProcessor{constructor(){super();this.s=0;this.n=0}" +
+        "process(i){const c=i[0]&&i[0][0];if(c){for(let k=0;k<c.length;k++)this.s+=c[k]*c[k];this.n+=c.length;" +
+        "if(this.n>=4096){this.port.postMessage(this.s/this.n);this.s=0;this.n=0}}return true}}registerProcessor('axo-meter',M)";
+      const url = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
+      await ac.audioWorklet.addModule(url);
+      URL.revokeObjectURL(url);
+      meterNode = new AudioWorkletNode(ac, 'axo-meter', { numberOfInputs: 1, numberOfOutputs: 1 });
+      meterNode.port.onmessage = e => onMeter(e.data);
+      note('takt-worklet');
+    } catch {
+      // Ersatz für Browser oder Seiten, die den Baustein nicht laden lassen
+      meterNode = ac.createScriptProcessor(4096, 1, 1);
+      meterNode.onaudioprocess = e => {
+        const c = e.inputBuffer.getChannelData(0);
+        let s = 0;
+        for (let k = 0; k < c.length; k++) s += c[k] * c[k];
+        onMeter(s / c.length);
+      };
+      note('takt-ersatz');
+    }
+    meterNode.connect(sink);
   }
   // Laufen eigene Klänge, wird am schon geöffneten Mikrofon die Echo-Unterdrückung des Browsers zugeschaltet,
   // sonst abgeschaltet. Das Mikrofon wird dafür nie neu geöffnet, damit der Browser nicht erneut um Erlaubnis fragt.
@@ -359,11 +474,13 @@
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
       });
       const ac = getCtx();                     // derselbe Ton-Kontext wie für die Klänge
-      await ac.resume();
+      await wakeAudio(ac);
       if (!analyser) { analyser = ac.createAnalyser(); analyser.fftSize = 2048; buf = new Float32Array(analyser.fftSize); }
+      await ensureMeter(ac);
       useMicStream(stream);
-      micEc = false;
+      micEc = false; micDown = false;
       begin();
+      showResume(ac.state !== 'running');      // ohne Tipp darf der Browser den Ton manchmal noch nicht starten
     } catch (e) {
       const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
       const none = e && (e.name === 'NotFoundError' || e.name === 'OverconstrainedError');
@@ -387,7 +504,10 @@
     syncToggle();
     restoreSounds();
     keepAwake();
-    restoreSes();
+    // Gespeicherte Sitzung nur beim ersten Start nach dem Laden zurückholen – nie über eine laufende Sitzung hinweg
+    if (!sesRestored && !ses.on) restoreSes();
+    sesRestored = true;
+    $('btnMic').textContent = 'Mikrofon starten';
   }
 
   $('btnMic').addEventListener('click', startMic);
@@ -482,13 +602,18 @@
   // Musik: Alle paar Sekunden setzt ein neuer, lang gehaltener Ton ein und blendet langsam wieder aus.
   // Die Töne stammen aus einer ruhigen Tonleiter und werden zufällig gewählt, darum wiederholt sich nichts genau.
   const PAD_NOTES = [65.41, 98.0, 130.81, 164.81, 196.0, 220.0, 261.63, 293.66, 329.63, 392.0];
-  let lastNote = -1, musicTimer = 0, rainTimer = 0;
+  let lastNote = -1, musicCount = 0, musicTimer = 0, rainTimer = 0;
   function musicVoice() {
     const ac = getCtx(), t = ac.currentTime + 0.05;
+    // Ruhiger Beginn: Der erste Ton ist ein tiefer Grundton. Danach liegt jeder neue Ton nah am vorigen
+    // (höchstens zwei Stufen entfernt), damit die Töne nicht hin und her springen. In der ersten halben Minute
+    // bleibt die Musik außerdem im tiefen und mittleren Bereich.
+    const early = musicCount < 5, top = early ? 6 : PAD_NOTES.length - 1;
     let i;
-    do { i = Math.floor(Math.random() * PAD_NOTES.length); } while (i === lastNote);
-    lastNote = i;
-    const f = PAD_NOTES[i], att = 4 + Math.random() * 3, hold = 4 + Math.random() * 5, rel = 6 + Math.random() * 4;
+    if (musicCount === 0) i = 2;
+    else do { i = clamp(lastNote + Math.floor(Math.random() * 5) - 2, 0, top); } while (i === lastNote);
+    lastNote = i; musicCount++;
+    const f = PAD_NOTES[i], att = (early ? 7 : 5) + Math.random() * 3, hold = 4 + Math.random() * 5, rel = 7 + Math.random() * 4;
     const peak = (f < 120 ? 0.11 : 0.075) * (0.8 + Math.random() * 0.4);
     const env = ac.createGain(), lp = ac.createBiquadFilter();
     lp.type = 'lowpass'; lp.frequency.value = 1100;
@@ -496,9 +621,11 @@
     env.gain.linearRampToValueAtTime(peak, t + att);
     env.gain.setValueAtTime(peak, t + att + hold);
     env.gain.linearRampToValueAtTime(0, t + att + hold + rel);
-    for (const [mul, type, lvl] of [[1, 'sine', 1], [1.004, 'sine', 0.7], [2, 'triangle', 0.18]]) {
+    // Der zweite Ton liegt nur einen Hauch daneben: Das ergibt ein sehr langsames, gleichmäßiges Schweben,
+    // bei hohen Tönen nicht schneller als bei tiefen
+    for (const [mul, add, type, lvl] of [[1, 0, 'sine', 1], [1, 0.22, 'sine', 0.6], [2, 0, 'triangle', 0.15]]) {
       const o = ac.createOscillator(), og = ac.createGain();
-      o.type = type; o.frequency.value = f * mul; og.gain.value = lvl;
+      o.type = type; o.frequency.value = f * mul + add; og.gain.value = lvl;
       o.connect(og); og.connect(lp);
       o.start(t); o.stop(t + att + hold + rel + 0.2);
     }
@@ -508,15 +635,22 @@
     clearTimeout(musicTimer);
     if (!snd.on.music) return;
     musicVoice();
-    musicTimer = setTimeout(musicLoop, 3500 + Math.random() * 3500);
+    // am Anfang kommen die Töne mit mehr Abstand, später etwas dichter
+    musicTimer = setTimeout(musicLoop, (musicCount < 4 ? 8000 : 5000) + Math.random() * 3000);
   }
   // Regentropfen: viele kurze, helle Tupfer zu zufälligen Zeiten
+  let rainUntil = 0;
   function rainLoop() {
     clearTimeout(rainTimer);
     if (!snd.on.rain) return;
-    const ac = getCtx(), t0 = ac.currentTime;
-    for (let n = 0; n < 6; n++) {
-      const t = t0 + 0.02 + Math.random() * 0.45, f = 1400 + Math.random() * 2800;
+    // Tropfen werden ein Stück im Voraus eingeplant, damit der Regen auch dann gleichmäßig bleibt,
+    // wenn der Browser die Zeitgeber im Hintergrund nur noch einmal pro Sekunde zulässt
+    const ac = getCtx(), now = ac.currentTime;
+    const t0 = Math.max(now, Math.min(rainUntil, now + 3)), t1 = now + 1.6;
+    rainUntil = Math.max(t0, t1);
+    const drops = Math.round((t1 - t0) / 0.45 * 6);
+    for (let n = 0; n < drops; n++) {
+      const t = t0 + 0.02 + Math.random() * (t1 - t0), f = 1400 + Math.random() * 2800;
       const o = ac.createOscillator(), og = ac.createGain();
       o.type = 'sine';
       o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.6, t + 0.05);
@@ -537,7 +671,7 @@
     const node = snd[name + 'G'], t = ac.currentTime;
     node.gain.cancelScheduledValues(t);
     node.gain.setTargetAtTime(on ? 1 : 0, t, 0.6);           // sanft ein- und ausblenden, nie ein Knacken
-    if (name === 'music' && on) { musicLoop(); setTimeout(() => { if (snd.on.music) musicVoice(); }, 1500); }
+    if (name === 'music' && on) { musicCount = 0; musicLoop(); }
     if (name === 'rain' && on) rainLoop();
     // Nach jedem Umschalten kurz neu einmessen, wie stark die Klänge beim Mikrofon ankommen
     snd.g = Infinity; snd.micS = 0; snd.outS = 0; snd.graceUntil = performance.now() + 3000;
@@ -597,6 +731,7 @@
   function readLevel() {
     let pow;
     if (snd.fakeMic) pow = snd.fakeMic();        // nur für Tests: künstliches Mikrofonsignal
+    else if (bgPow !== null) pow = bgPow;        // Tab im Hintergrund: Wert vom Taktgeber aus dem Ton
     else {
       if (demoMode) return $('demo').value / 100;
       if (!analyser) return 0;
@@ -651,6 +786,14 @@
                           active: 0, sleep: 0, awake: 0, hunt: 0, wakeups: 0, attacks: 0, asleep: true, asleepFor: 0, saveT: 0 });
   let ses = newSes(), sesMsgUntil = 0;
   Object.defineProperty(st, 'ses', { get: () => ses });
+  // Füllstand der Muschel-Anzeige: 0 bis 5, mit Zwischenwerten. Zwischen zwei Stufen wächst er gleichmäßig,
+  // so sieht die Klasse, wie nah die nächste Muschel ist. Vergeben werden weiterhin nur ganze Muscheln.
+  const SHELL_STEPS = [0, 0.2, 0.4, 0.6, 0.8, 0.95];
+  const shellFill = share => {
+    for (let i = 5; i >= 1; i--) if (share >= SHELL_STEPS[i]) return i === 5 ? 5 : i + (share - SHELL_STEPS[i]) / (SHELL_STEPS[i + 1] - SHELL_STEPS[i]);
+    return share / SHELL_STEPS[1];
+  };
+  let hudFill = 0;
   const sesShare = () => ses.active > 0 ? ses.sleep / ses.active : 0;
   const sesShells = () => ses.active >= ses.minSeconds ? shellsFor(sesShare()) : 0;
   const fmtClock = s => {
@@ -665,13 +808,26 @@
   const embedded = window.parent !== window && new URLSearchParams(location.search).get('embed') === 'nobuki';
   const toHost = msg => { if (embedded) window.parent.postMessage(Object.assign({ app: 'leise-axolotl' }, msg), location.origin); };
 
-  function saveSes() { store.set('axo.session', ses.on ? JSON.stringify(Object.assign({}, ses, { savedAt: Date.now() })) : ''); }
-  function restoreSes() {
-    // Nach versehentlichem Neuladen: Sitzung wiederherstellen, aber pausiert, damit die Lücke nicht mitzählt
+  let sesRestored = false;
+  function saveSes() { store.set('axo.session', ses.on ? JSON.stringify(Object.assign({}, ses, { savedAt: Date.now(), demo: demoMode })) : ''); }
+  const storedSes = () => {
     try {
       const o = JSON.parse(store.get('axo.session', '') || 'null');
-      if (o && o.on && Date.now() - o.savedAt < 12 * 3600 * 1000) { ses = Object.assign(newSes(), o, { paused: true }); syncSesUi(); }
-    } catch { /* kein gespeicherter Stand */ }
+      return o && o.on && Date.now() - o.savedAt < 12 * 3600 * 1000 ? o : null;
+    } catch { return null; }
+  };
+  function restoreSes() {
+    // Die Seite wurde neu geladen, während eine Sitzung lief: dieselbe Sitzung (gleiche Kennung, gleiche Klasse,
+    // gleiche Werte) geht weiter. Die Zeit dazwischen wurde nicht gemessen und zählt deshalb nicht mit.
+    // War die Unterbrechung länger als drei Minuten, bleibt die Sitzung pausiert, bis die Lehrkraft weitermacht.
+    const o = storedSes();
+    if (!o) return;
+    const gap = Date.now() - o.savedAt;
+    delete o.savedAt; delete o.demo;
+    ses = Object.assign(newSes(), o, { paused: o.paused || gap > 180000 });
+    if (ses.classId && classList.some(c => c.id === String(ses.classId))) $('classSel').value = String(ses.classId);
+    note('sitzung-fortgesetzt');
+    syncSesUi();
   }
 
   function sesTick(sdt, a) {
@@ -684,7 +840,7 @@
     if (ses.asleep) { ses.sleep += sdt; ses.asleepFor += sdt; }
     else { ses.awake += sdt; if (st.swim) ses.hunt += sdt; }
     ses.saveT += sdt;
-    if (ses.saveT >= 5) { ses.saveT = 0; saveSes(); syncSesUi(); }
+    if (ses.saveT >= 2) { ses.saveT = 0; saveSes(); syncSesUi(); }
   }
 
   function syncSesUi() {
@@ -756,7 +912,11 @@
     const sel = $('classSel');
     sel.textContent = '';
     for (const c of classList) { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; sel.appendChild(o); }
-    const want = selectedId != null ? String(selectedId) : store.get('axo.class', '');
+    // Reihenfolge: Klasse der laufenden (auch der gerade wiederherzustellenden) Sitzung, dann die von NobuKI
+    // vorgewählte, dann die zuletzt benutzte
+    const pending = ses.on ? ses : storedSes();
+    const want = pending && pending.classId ? String(pending.classId)
+      : selectedId != null ? String(selectedId) : store.get('axo.class', '');
     if (classList.some(c => c.id === want)) sel.value = want;
     $('classRow').hidden = classList.length === 0;
     sel.disabled = classList.length === 1 || ses.on;
@@ -1195,7 +1355,9 @@
   function update(dt, sdt = dt) {
     st.time += dt;
     const resting = ses.on && ses.paused;      // Pause: Mikrofon wird nicht ausgewertet, das Becken kommt zur Ruhe
-    const raw = running && !resting ? readLevel() : 0;
+    const live = running && measuring();       // wird gerade wirklich gemessen?
+    if (!live) sdt = 0;                        // ohne Messung zählt die Statistik nicht – keine geschenkte ruhige Zeit
+    const raw = live && !resting ? readLevel() : 0;
     st.level += (raw - st.level) * (1 - Math.exp(-dt / 0.25));
     const tau = resting ? 1.2 : st.level > st.unruhe ? TAU_UP : TAU_DOWN;
     st.unruhe += (st.level - st.unruhe) * (1 - Math.exp(-dt / tau));
@@ -1889,20 +2051,30 @@
       .map(q => new Path2D('M256 383 ' + q)),
     base: new Path2D('M211 385 Q256 373 301 385 Q279 410 256 412 Q233 410 211 385 Z')
   };
-  function drawShellIcon(x, y, size, gold, alpha) {
+  // fill: 0 = leer, 1 = ganz golden; dazwischen füllt sich die Muschel von unten nach oben mit Gold
+  function drawShellIcon(x, y, size, fill, alpha) {
     g.save();
     g.globalAlpha = alpha;
     g.translate(x, y); g.scale(size / 464, size / 464); g.translate(-24, -34);
     g.lineJoin = 'round'; g.lineCap = 'round';
-    const edge = gold ? '#a8701a' : 'rgba(255, 255, 255, 0.8)';
-    g.fillStyle = gold ? '#f6c445' : 'rgba(255, 255, 255, 0.28)';
-    g.strokeStyle = edge; g.lineWidth = 12;
-    g.fill(SHELL_ART.body); g.stroke(SHELL_ART.body);
-    g.strokeStyle = gold ? '#d9992b' : 'rgba(255, 255, 255, 0.55)'; g.lineWidth = 9;
-    for (const r of SHELL_ART.ribs) g.stroke(r);
-    g.fillStyle = gold ? '#e8a93a' : 'rgba(255, 255, 255, 0.28)';
-    g.strokeStyle = edge; g.lineWidth = 10;
-    g.fill(SHELL_ART.base); g.stroke(SHELL_ART.base);
+    const paint = gold => {
+      const edge = gold ? '#a8701a' : 'rgba(255, 255, 255, 0.8)';
+      g.fillStyle = gold ? '#f6c445' : 'rgba(255, 255, 255, 0.28)';
+      g.strokeStyle = edge; g.lineWidth = 12;
+      g.fill(SHELL_ART.body); g.stroke(SHELL_ART.body);
+      g.strokeStyle = gold ? '#d9992b' : 'rgba(255, 255, 255, 0.55)'; g.lineWidth = 9;
+      for (const r of SHELL_ART.ribs) g.stroke(r);
+      g.fillStyle = gold ? '#e8a93a' : 'rgba(255, 255, 255, 0.28)';
+      g.strokeStyle = edge; g.lineWidth = 10;
+      g.fill(SHELL_ART.base); g.stroke(SHELL_ART.base);
+    };
+    fill = fill === true ? 1 : clamp(+fill || 0);
+    if (fill < 1) paint(false);
+    if (fill > 0) {
+      const top = 106, bottom = 422, lvl = bottom - (bottom - top) * fill;   // Höhe der Muschel im Bild
+      g.beginPath(); g.rect(40, lvl, 432, bottom - lvl + 10); g.clip();
+      paint(true);
+    }
     g.restore();
   }
 
@@ -1911,7 +2083,7 @@
     if (!ses.on) return;
     // gleiche Höhe wie die Garnelen-Anzeige oben rechts
     const csc = Math.max(0.42, S * 0.5), h = 44 * csc + 14, sz = h - 8, gap = sz * 0.12, x0 = 16, y0 = 14;
-    const have = shellsFor(sesShare()), ready = ses.active >= ses.minSeconds;   // vor Ablauf der Mindestdauer nur blass
+    const ready = ses.active >= ses.minSeconds;   // vor Ablauf der Mindestdauer nur blass
     // Solange die Mindestdauer nicht erreicht ist, steht daneben, wie lange es noch dauert
     const left = Math.max(1, Math.ceil((ses.minSeconds - ses.active) / 60));
     const hint = ready ? '' : 'zählt in ' + left + ' Min.';
@@ -1923,7 +2095,11 @@
     g.beginPath();
     if (g.roundRect) g.roundRect(x0, y0, w, h, h / 2); else g.rect(x0, y0, w, h);
     g.fill();
-    for (let i = 0; i < 5; i++) drawShellIcon(x0 + 10 + i * (sz + gap), y0 + 4, sz, i < have, i < have ? (ready ? 1 : 0.5) : 0.9);
+    // Die Muscheln laden sich langsam auf und entladen sich wieder, wenn es unruhig wird
+    const target = shellFill(sesShare());
+    hudFill += (target - hudFill) * 0.06;
+    if (Math.abs(target - hudFill) < 0.002) hudFill = target;
+    for (let i = 0; i < 5; i++) drawShellIcon(x0 + 10 + i * (sz + gap), y0 + 4, sz, clamp(hudFill - i), ready ? 1 : 0.6);
     if (hint) {
       g.fillStyle = 'rgba(18, 48, 63, 0.85)';
       g.textBaseline = 'middle'; g.textAlign = 'left';
@@ -1977,15 +2153,64 @@
   }
 
   // ---------- Schleife ----------
-  let last = performance.now();
+  // Ein Schritt: Bewegung in kleinen Stücken, Statistik mit der echten vergangenen Zeit.
+  // Lücken über 2 Sekunden (Gerät gesperrt, Tab eingefroren) wurden nicht gemessen und zählen nicht mit.
+  let last = performance.now(), lastRaf = 0;
+  function step(now, count) {
+    const real = (now - last) / 1000;
+    if (real <= 0) return;
+    last = now;
+    update(Math.min(0.1, real), count && real <= 2 ? real : 0);
+  }
+  // Sichtbarer Tab: Die Animation gibt den Takt vor.
   function frame(now) {
-    const real = (now - last) / 1000; last = now;
-    // Statistik mit echter Zeit; Lücken über 2 Sekunden (Tab im Hintergrund, Gerät gesperrt) zählen nicht mit
-    update(Math.min(0.1, real), real > 2 ? 0 : real);
+    lastRaf = now;
+    step(now, true);
     draw();
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+  // Tab im Hintergrund: Der Browser hält die Animation an. Dann treibt der Taktgeber aus dem Ton die Messung
+  // weiter, mit der echten Lautstärke des Mikrofons. So läuft die Sitzung auch in einem anderen Tab weiter.
+  const hiddenNow = () => performance.now() - lastRaf > 300;
+  onMeter = pow => {
+    st.meterAt = performance.now();
+    if (!running || demoMode || !hiddenNow()) return;
+    bgPow = pow;
+    step(performance.now(), true);
+    bgPow = null;
+  };
+  // Ersatztakt ohne Mikrofon (Testmodus) und als Rückfall: Der Browser lässt ihn im Hintergrund nur etwa einmal
+  // pro Sekunde zu. Mit Mikrofon zählt die Statistik dann nicht, weil nicht durchgehend gemessen wird.
+  setInterval(() => {
+    if (!running || !hiddenNow()) return;
+    if (!demoMode && performance.now() - (st.meterAt || 0) < 1000) return;   // der Taktgeber aus dem Ton läuft
+    step(performance.now(), demoMode);
+  }, 250);
+  window.addEventListener('pagehide', () => saveSes());
+
+  // Fortsetzen-Knopf in der laufenden Sitzung (nach unterbrochenem Mikrofon oder angehaltenem Ton)
+  $('btnResume').addEventListener('click', async () => {
+    await wakeAudio(getCtx());
+    if (micDown || !micStream || micStream.getAudioTracks().every(t => t.readyState === 'ended')) { micDown = true; await reconnectMic(); }
+    else showResume(audioCtx.state !== 'running');
+  });
+
+  // Die Seite wurde mitten in einer Sitzung neu geladen: ohne Startfenster weitermachen, wenn der Browser das
+  // Mikrofon schon freigegeben hat. Sonst zeigt das Startfenster „Sitzung fortsetzen".
+  async function autoResume() {
+    const o = storedSes();
+    if (!o) return;
+    note('neu-geladen-mit-sitzung');
+    if (o.demo) { demoMode = true; begin(); return; }
+    $('btnMic').textContent = 'Sitzung fortsetzen';
+    try {
+      const p = await navigator.permissions.query({ name: 'microphone' });
+      if (p.state === 'granted') await startMic();
+    } catch { /* Browser kennt die Abfrage nicht: Startfenster bleibt */ }
+  }
+  st.autoResume = autoResume; st.diag = diag;
+  autoResume();
 })();
 </script>
 </body>
