@@ -838,13 +838,29 @@
     }
     g.globalAlpha = 1;
 
-    // Schatten und Sandhügel von Steinen und Pflanzen gehören zum Boden: Sie verdecken nie ein Tier
-    for (const r of ROCKS) { const k = S * zs(r.z); shadow(r.x + 14 * k, r.z, r.w * k * 0.6, 14 * k, 0.2); }
+    // Alles, was auf dem Boden liegt, wird hier gezeichnet – vor Steinen, Pflanzen und Tieren.
+    // Sandflecken und Schatten können deshalb nie etwas verdecken und nie auf einem Tier liegen.
+    for (const r of ROCKS) {
+      const k = S * zs(r.z), w = r.w * k;
+      shadow(r.x + 14 * k, r.z, w * 0.6, 14 * k, 0.2);
+      g.fillStyle = sandAt(r.z);                // Sandfleck, in dem der Stein sitzt
+      g.beginPath(); g.ellipse(r.x, gy(r.z) + 8 * k, w * 0.56, 7 * k, 0, 0, 7); g.fill();
+    }
     for (const c of PLANTS) {
       const k = S * zs(c.z), cx = c.fx * W;
       shadow(cx, c.z, c.n * 11 * k, 6 * k, 0.16);
       g.fillStyle = sandAt(c.z);
       g.beginPath(); g.ellipse(cx, gy(c.z) + 5 * k, c.n * 10 * k, 5 * k, 0, 0, 7); g.fill();
+    }
+    // Schatten der Tiere: je höher sie schwimmen, desto blasser
+    for (const p of st.shrimp) {
+      if (p.state !== 'free' && p.state !== 'flee') continue;
+      const k = S * zs(p.z), up = clamp(p.h / (300 * S));
+      shadow(p.x, p.z, lerp(20, 12, up) * k, lerp(5, 3, up) * k, lerp(0.2, 0.05, up));
+    }
+    {
+      const k = S * zs(st.z), up = clamp((st.h - homeH()) / (H * 0.5));
+      shadow(st.x - st.face * 90 * k, st.z, lerp(150, 100, up) * k, lerp(16, 9, up) * k, lerp(0.22, 0.06, up));
     }
 
     // Lichtstrahlen von oben, wandern sehr langsam
@@ -965,7 +981,8 @@
         const lean = (Math.sin(c.ph * 0.6 + b.ph) * amp + c.k) * Math.pow(t, 1.5);
         const wave = Math.sin(t * (2.2 + b.wv) * Math.PI * 2 - c.ph * 1.3 + b.ph) * wamp * (0.2 + 0.8 * t);
         const x = cx + b.ox * k + (lean + wave) * k, y = base - t * Hb;
-        const w = b.w * k * (1 - 0.75 * t) / 2 * (1 + 0.22 * Math.sin(t * 15 + b.ph));   // leicht welliger Rand
+        // leicht welliger Rand; unten läuft der Halm spitz zu, als wüchse er aus dem Sand
+        const w = b.w * k * (1 - 0.75 * t) / 2 * (1 + 0.22 * Math.sin(t * 15 + b.ph)) * (0.25 + 0.75 * smooth(0, 0.07, t));
         L.push([x - w, y]); R.push([x + w, y]);
       }
       g.fillStyle = b.col;
@@ -975,22 +992,24 @@
       g.closePath(); g.fill();
     }
     g.globalAlpha = 1;
-    g.fillStyle = sandAt(c.z);                  // nur ein schmaler Sandrand direkt an den Halmen
-    g.beginPath(); g.ellipse(cx, base + 1.5 * k, c.n * 7.5 * k, 2.4 * k, 0, 0, 7); g.fill();
   }
 
   function drawRock(r) {
     const k = S * zs(r.z), w = r.w * k, h = r.h * k, base = gy(r.z) + 6 * k;
+    // Umriss des Steins. Die Unterkante ist geschwungen, damit er im Sandfleck sitzt
+    // (der Sandfleck selbst gehört zum Boden und wird in drawScene gezeichnet).
+    const rockPath = () => {
+      g.beginPath();
+      for (const [sx, syy] of r.shape) g.lineTo(r.x + sx * w, base - syy * h);
+      g.quadraticCurveTo(r.x, base + 9 * k, r.x + r.shape[0][0] * w, base - r.shape[0][1] * h);
+      g.closePath();
+    };
     g.fillStyle = '#4a3b38';
-    g.beginPath();
-    for (const [sx, syy] of r.shape) g.lineTo(r.x + sx * w, base - syy * h);
-    g.closePath(); g.fill();
+    rockPath(); g.fill();
     for (const [px, py, pr, light] of r.pores) {
       g.fillStyle = light ? 'rgba(126, 102, 94, 0.6)' : 'rgba(24, 16, 16, 0.55)';
       g.beginPath(); g.ellipse(r.x + px * w, base - py * h, pr * k, pr * k * 0.8, 0, 0, 7); g.fill();
     }
-    g.fillStyle = sandAt(r.z);                  // Sand am Fuß des Steins
-    g.beginPath(); g.ellipse(r.x, base + 2 * k, w * 0.56, 6 * k, 0, 0, 7); g.fill();
     caves.forEach((c, i) => {
       if (c.z !== r.z || Math.abs(c.x - r.x) > w) return;
       const cy = sy(c.h, c.z);
@@ -1012,14 +1031,16 @@
       g.beginPath(); g.ellipse(c.x + c.rx * 0.1, cy - c.ry * 1.12, c.rx * 1.15, c.ry * 0.3, -0.08, 0, 7); g.fill();
       g.fillStyle = 'rgba(126, 102, 94, 0.45)';
       g.beginPath(); g.ellipse(c.x - c.rx * 0.2, cy - c.ry * 1.2, c.rx * 0.5, c.ry * 0.12, -0.1, 0, 7); g.fill();
+      g.save();                                  // Sand im Eingang bleibt auf der Fläche des Steins
+      rockPath(); g.clip();
       g.fillStyle = sandAt(c.z);
       g.beginPath(); g.ellipse(c.x, cy + c.ry * 0.95, c.rx * 0.95, c.ry * 0.34, 0, 0, 7); g.fill();
+      g.restore();
     });
   }
 
   function drawFreeShrimp(p) {
-    const k = S * zs(p.z), up = clamp(p.h / (300 * S));
-    shadow(p.x, p.z, lerp(20, 12, up) * k, lerp(5, 3, up) * k, lerp(0.2, 0.05, up));
+    const k = S * zs(p.z);                       // ihr Schatten liegt im Boden-Durchgang (drawScene)
     const bob = Math.sin(p.ph * 0.45) * 2.5 * S * clamp((p.h - shrimpH()) / (20 * S));
     drawShrimp(p.x, sy(p.h, p.z) + bob, k * 0.75, p.face === undefined ? p.dir : p.face, p.color, p.ph, 1, p.pitch || 0);
   }
@@ -1081,9 +1102,7 @@
   function drawAxolotl() {
     const a = st.unruhe, k = S * zs(st.z), y = sy(st.h, st.z);
     const sad = st.sad, face = st.face;
-    // Schatten auf dem Sand in seiner Tiefe; je höher er schwimmt, desto blasser
-    const up = clamp((st.h - homeH()) / (H * 0.5));
-    shadow(st.x - face * 90 * k, st.z, lerp(150, 100, up) * k, lerp(16, 9, up) * k, lerp(0.22, 0.06, up));
+    // (Sein Schatten liegt im Boden-Durchgang, siehe drawScene.)
 
     g.save();
     g.translate(st.x, y);
@@ -1226,20 +1245,31 @@
       lx = dx / d * m; ly = dy / d * m;
     }
     if (sad > 0) { lx *= 1 - sad * (1 - smooth(0.3, 0.6, a)); ly = lerp(ly, 3.5, sad * (1 - smooth(0.3, 0.6, a))); }   // Blick gesenkt
+    // Das Auge schließt sich fließend: Die Pupille wird flach, sinkt zum Lidbogen und blendet aus,
+    // während der geschlossene Bogen einblendet. Der Glanzpunkt bleibt immer innerhalb der Pupille.
+    const eyeA = smooth(0.06, 0.3, open), lidA = 1 - smooth(0.1, 0.36, open);
+    const py = lerp(-2.5, -6, smooth(0.06, 0.45, open)) + ly, shine = smooth(0.45, 0.85, open);
     for (const ex of [-24, 24]) {
-      if (open < 0.12) {
-        g.strokeStyle = C.line; g.lineWidth = 3.5;
-        g.beginPath(); g.arc(ex, -8, 7, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
-      } else {
+      if (eyeA > 0.01) {
+        g.globalAlpha = eyeA;
         if (white > 0.01) {
           g.fillStyle = 'rgba(255,255,255,' + white + ')';
-          g.beginPath(); g.arc(ex, -6, wr, 0, 7); g.fill();
+          g.beginPath(); g.ellipse(ex, -6, wr, wr * Math.min(1, open * 1.4), 0, 0, 7); g.fill();
         }
-        if (C.ring) { g.fillStyle = C.ring; g.beginPath(); g.ellipse(ex + lx, -6 + ly, pr + 2.5, (pr + 2.5) * open, 0, 0, 7); g.fill(); }
+        if (C.ring) { g.fillStyle = C.ring; g.beginPath(); g.ellipse(ex + lx, py, pr + 2.5, (pr + 2.5) * open, 0, 0, 7); g.fill(); }
         g.fillStyle = C.eye;
-        g.beginPath(); g.ellipse(ex + lx, -6 + ly, pr, pr * open, 0, 0, 7); g.fill();
-        g.fillStyle = 'rgba(255,255,255,0.9)';
-        g.beginPath(); g.arc(ex + lx + 2.5, -8.5 + ly, pr * 0.3 * open, 0, 7); g.fill();
+        g.beginPath(); g.ellipse(ex + lx, py, pr, pr * open, 0, 0, 7); g.fill();
+        if (shine > 0.01) {
+          g.fillStyle = 'rgba(255,255,255,' + (0.9 * shine).toFixed(3) + ')';
+          g.beginPath(); g.arc(ex + lx + 2.5 * open, py - 2.5 * open, pr * 0.3 * open, 0, 7); g.fill();
+        }
+        g.globalAlpha = 1;
+      }
+      if (lidA > 0.01) {
+        g.globalAlpha = lidA;
+        g.strokeStyle = C.line; g.lineWidth = 3.5;
+        g.beginPath(); g.arc(ex, -8, 7, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
+        g.globalAlpha = 1;
       }
     }
 
