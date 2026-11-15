@@ -346,7 +346,7 @@
   // ---------- Tablet ----------
   const isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
   // Fassung dieser Datei, klein im Startfenster: So lässt sich auf jedem Gerät sehen, ob die neueste Fassung läuft
-  const VERSION = '15.11.2026 · 9';
+  const VERSION = '15.11.2026 · 11';
   $('ver').textContent = 'Fassung ' + VERSION;
   if (isTouch) document.body.classList.add('touch');
   // Smartphone: kurze Bildschirmseite deutlich kleiner als bei einem Tablet
@@ -494,12 +494,7 @@
   // sonst abgeschaltet. Das Mikrofon wird dafür nie neu geöffnet, damit der Browser nicht erneut um Erlaubnis fragt.
   // Kann der Browser die Einstellung nicht im laufenden Betrieb ändern, bleibt alles, wie es ist; das Herausrechnen
   // der eigenen Klänge (cleanMic) funktioniert auch ohne.
-  // Safari (und damit jeder Browser auf iPad und iPhone) schaltet mit der Echo-Unterdrückung in einen
-  // Telefon-Modus: Die eigenen Klänge werden dann sehr leise und Geräusche im Raum stark weggefiltert.
-  // Dort bleibt das Mikrofon deshalb unverändert; der eigene Klang wird nur von der App selbst abgezogen.
-  const isSafariKind = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg\//.test(navigator.userAgent);
   async function setMicEcho(on) {
-    if (isSafariKind) return;
     if (demoMode || !micStream || micEc === on) return;
     micEc = on;
     for (const t of micStream.getAudioTracks()) {
