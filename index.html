@@ -40,6 +40,22 @@
   #start h1 { margin: 0 0 10px; font-size: 32px; }
   #start p { margin: 0 0 22px; font-size: 18px; line-height: 1.45; }
   #start .hint { font-size: 14px; color: #55707d; margin: 18px 0 0; }
+  /* Hinweis nur auf Smartphones */
+  #start .phoneTip { background: #e3f2f0; color: #12303f; border-radius: 12px; padding: 10px 14px; font-size: 15px; line-height: 1.4; margin: 0 0 18px; }
+  #start .phoneTip[hidden] { display: none; }
+  /* Niedrige Bildschirme (Smartphone quer): Startfenster kompakter und zum Schieben, damit alles erreichbar bleibt */
+  @media (max-height: 560px) {
+    #start { align-items: flex-start; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 10px; }
+    #start .card { padding: 16px 22px; margin: auto; max-width: 560px; }
+    .brand { margin: 0 0 4px; }
+    .brand img { width: 56px; }
+    .brand span { font-size: 14px; }
+    #start h1 { font-size: 22px; margin-bottom: 6px; }
+    #start p { font-size: 15px; margin-bottom: 12px; }
+    #start .phoneTip { font-size: 13.5px; padding: 8px 12px; margin-bottom: 12px; }
+    #start .hint { font-size: 12.5px; margin-top: 10px; }
+    #classRow { margin-bottom: 12px; }
+  }
   #classRow { margin: 0 0 20px; }
   #classRow label { display: block; font-weight: 600; font-size: 16px; margin-bottom: 6px; }
   /* Die ganze Fläche öffnet die Auswahl; der Pfeil ist groß und sitzt mit Abstand zum Rand */
@@ -156,10 +172,12 @@
   /* Hochformat: bitte quer drehen */
   #rotate {
     position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center;
-    background: rgba(8, 48, 70, 0.9); color: #fdf8ee; text-align: center; padding: 24px;
+    background: rgba(8, 48, 70, 0.97); color: #fdf8ee; text-align: center; padding: 24px;
   }
   #rotate .icon { font-size: 64px; line-height: 1; display: block; margin-bottom: 14px; }
   #rotate p { margin: 0; font-size: 24px; font-weight: 600; }
+  #rotate p.sub { font-size: 16px; font-weight: 500; margin: 12px auto 0; opacity: 0.85; max-width: 300px; }
+  #rotate p.sub[hidden] { display: none; }
   @media (orientation: portrait) and (max-width: 1100px) { #rotate { display: flex; } }
 </style>
 </head>
@@ -177,6 +195,7 @@
       <label for="classSel">Für welche Klasse?</label>
       <select id="classSel"></select>
     </div>
+    <p class="phoneTip" id="phoneTip" hidden>Tipp: Auf einem Tablet, Laptop oder Rechner macht der Leise-Axolotl am meisten Freude. Zum Ausprobieren geht es auch hier.</p>
     <button class="primary" id="btnMic">Mikrofon starten</button>
     <p style="margin:14px 0 0"><button class="secondary" id="btnDemo">Ohne Mikrofon ausprobieren</button></p>
     <p class="hint">Es wird nichts aufgenommen oder gespeichert. Die App misst nur, wie laut es gerade ist.</p>
@@ -258,7 +277,7 @@
   </div>
 </div>
 
-<div id="rotate"><div><span class="icon" aria-hidden="true">↻</span><p>Bitte das Tablet quer drehen</p></div></div>
+<div id="rotate"><div><span class="icon" aria-hidden="true">↻</span><p id="rotateText">Bitte das Tablet quer drehen</p><p class="sub" id="rotateSub" hidden>Am schönsten ist der Leise-Axolotl auf einem Tablet, Laptop oder Rechner.</p></div></div>
 
 <script>
 (() => {
@@ -325,6 +344,14 @@
   // ---------- Tablet ----------
   const isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
   if (isTouch) document.body.classList.add('touch');
+  // Smartphone: kurze Bildschirmseite deutlich kleiner als bei einem Tablet
+  const isPhone = isTouch && Math.min(screen.width, screen.height) <= 500;
+  if (isPhone) {
+    document.body.classList.add('phone');
+    $('phoneTip').hidden = false;
+    $('rotateText').textContent = 'Bitte das Smartphone quer drehen';
+    $('rotateSub').hidden = false;
+  }
   document.addEventListener('gesturestart', e => e.preventDefault());       // kein Zoomen mit zwei Fingern (iPad)
 
   // Bildschirm bleibt an, solange die App läuft
