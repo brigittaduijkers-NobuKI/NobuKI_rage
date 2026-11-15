@@ -370,8 +370,11 @@
     $('start').style.display = 'none';
     $('panel').style.display = 'block';
     $('demoRow').style.display = demoMode ? 'block' : 'none';
-    if (isTouch) $('panel').classList.add('collapsed');      // auf Tablets verdeckt die Leiste sonst das Becken
+    // Leiste so, wie sie zuletzt war. Beim ersten Mal: auf Tablets eingeklappt, sonst offen.
+    const panelWas = store.get('axo.panel', isTouch ? 'zu' : 'offen');
+    $('panel').classList.toggle('collapsed', panelWas === 'zu');
     syncToggle();
+    restoreSounds();
     keepAwake();
     restoreSes();
   }
@@ -386,7 +389,11 @@
     t.title = closed ? 'Einstellungen öffnen' : 'Einstellungen schließen';
     t.setAttribute('aria-label', t.title);
   };
-  $('toggle').addEventListener('click', () => { $('panel').classList.toggle('collapsed'); syncToggle(); });
+  $('toggle').addEventListener('click', () => {
+    const closed = $('panel').classList.toggle('collapsed');
+    store.set('axo.panel', closed ? 'zu' : 'offen');          // beim nächsten Mal wieder so
+    syncToggle();
+  });
   syncToggle();
   // Vollbild, mit Ersatzweg für Safari. Ohne Vollbild-Funktion: Hinweis auf den Home-Bildschirm.
   const rootEl = document.documentElement;
@@ -533,8 +540,21 @@
     snd.fade.gain.setTargetAtTime(paused ? 0 : 1, t, 0.7);
     if (!paused) snd.graceUntil = Math.max(snd.graceUntil, performance.now() + 2500);
   }
-  for (const [id, name] of [['sndMusic', 'music'], ['sndOcean', 'ocean'], ['sndRain', 'rain']]) {
-    $(id).addEventListener('change', e => setSound(name, e.target.checked));
+  const SOUND_BOXES = [['sndMusic', 'music'], ['sndOcean', 'ocean'], ['sndRain', 'rain']];
+  for (const [id, name] of SOUND_BOXES) {
+    $(id).addEventListener('change', e => {
+      setSound(name, e.target.checked);
+      store.set('axo.snd', JSON.stringify(snd.on));          // beim nächsten Mal wieder so
+    });
+  }
+  // Nach dem Start der App: die Klänge wieder einschalten, die zuletzt liefen
+  function restoreSounds() {
+    try {
+      const was = JSON.parse(store.get('axo.snd', '') || '{}');
+      for (const [id, name] of SOUND_BOXES) {
+        if (was[name] && !snd.on[name]) { $(id).checked = true; setSound(name, true); }
+      }
+    } catch { /* nichts gemerkt */ }
   }
   $('sndVol').value = store.get('axo.sndVol', '50');
   $('sndVol').addEventListener('input', () => {
@@ -611,8 +631,9 @@
   const minSel = $('minSel');
   const minMinutes = () => clamp(Math.round(+minSel.value / 5) * 5, 5, 60);
   const syncMinOut = () => { $('minOut').textContent = minMinutes() + ' Minuten'; };
-  minSel.value = '15';
-  minSel.addEventListener('input', syncMinOut);
+  // Beim allerersten Öffnen 15 Minuten, danach so, wie es zuletzt eingestellt war
+  { const m = +store.get('axo.min', '15'); minSel.value = String(m >= 5 && m <= 60 && m % 5 === 0 ? m : 15); }
+  minSel.addEventListener('input', () => { syncMinOut(); if (!ses.on) store.set('axo.min', String(minMinutes())); });
   syncMinOut();
   const shellsFor = share => share >= 0.95 ? 5 : share >= 0.8 ? 4 : share >= 0.6 ? 3 : share >= 0.4 ? 2 : share >= 0.2 ? 1 : 0;
   const newSes = () => ({ on: false, paused: false, id: null, startedAt: null, endedAt: null, minSeconds: 15 * 60,
