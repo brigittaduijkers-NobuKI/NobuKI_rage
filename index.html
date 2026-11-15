@@ -687,6 +687,10 @@
   function sndSyncPause() {
     if (!snd.built) return;
     const t = getCtx().currentTime, paused = ses.on && ses.paused;
+    // Nur wenn sich die Pause wirklich ändert. Diese Stelle wird während einer Sitzung alle paar Sekunden
+    // durchlaufen; die Einmess-Zeit darf dabei nicht jedes Mal neu beginnen, sonst hört der Axolotl nie zu.
+    if (paused === snd.wasPaused) return;
+    snd.wasPaused = paused;
     snd.fade.gain.cancelScheduledValues(t);
     snd.fade.gain.setTargetAtTime(paused ? 0 : 1, t, 0.7);
     if (!paused) snd.graceUntil = Math.max(snd.graceUntil, performance.now() + 2500);
