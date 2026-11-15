@@ -359,8 +359,15 @@
 
   // ---------- Tablet ----------
   const isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
+  // iPad und iPhone liefern das Mikrofon viel leiser an als ein Laptop. Dort wird die Messung deshalb angehoben,
+  // damit der Empfindlichkeitsregler wieder im gewohnten Bereich arbeitet. Zum Ausprobieren lässt sich der Wert
+  // über die Adresse ändern: ?mikro=30 hebt um 30 Dezibel an, ?mikro=0 schaltet die Anhebung aus.
+  const urlParams = new URLSearchParams(location.search);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const micWish = parseFloat(urlParams.get('mikro'));
+  const MIC_BOOST_DB = isFinite(micWish) ? Math.max(-20, Math.min(50, micWish)) : (isIOS ? 20 : 0);
   // Fassung dieser Datei, klein im Startfenster: So lässt sich auf jedem Gerät sehen, ob die neueste Fassung läuft
-  const VERSION = '15.11.2026 · 14';
+  const VERSION = '15.11.2026 · 15' + (MIC_BOOST_DB ? ' · Mikrofon +' + MIC_BOOST_DB : '') + (urlParams.get('klaenge') === '1' ? ' · Klänge an' : '');
   $('ver').textContent = 'Fassung ' + VERSION;
   if (isTouch) document.body.classList.add('touch');
   // Smartphone: kurze Bildschirmseite deutlich kleiner als bei einem Tablet
@@ -823,7 +830,7 @@
       pow = sum / buf.length;
     }
     pow = cleanMic(pow);                         // eigene Klänge herausrechnen
-    const db = 20 * Math.log10(Math.sqrt(pow) + 1e-7);
+    const db = 20 * Math.log10(Math.sqrt(pow) + 1e-7) + MIC_BOOST_DB;
     const s = sens.value / 100;
     const quietDb = lerp(-32, -66, s);   // darunter: völlig ruhig
     const loudDb = quietDb + 26;         // darüber: zu laut
