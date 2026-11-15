@@ -397,7 +397,10 @@
       // Großer Ton-Puffer: Die Klänge müssen nicht auf die Millisekunde genau sein. Dafür bleiben sie flüssig,
       // auch wenn das Gerät stark beschäftigt ist (zum Beispiel beim Übertragen des Bildschirms mit AirPlay).
       const AC = window.AudioContext || window.webkitAudioContext;
-      try { audioCtx = new AC({ latencyHint: 'playback' }); } catch { audioCtx = new AC(); }
+      // Erbeten werden 0,2 Sekunden; der Browser nimmt davon so viel, wie er erlaubt. Für die Klänge und die
+      // Lautstärke-Messung spielt diese kleine Verzögerung keine Rolle.
+      try { audioCtx = new AC({ latencyHint: 0.2 }); }
+      catch { try { audioCtx = new AC({ latencyHint: 'playback' }); } catch { audioCtx = new AC(); } }
       note('ton-puffer-' + Math.round((audioCtx.baseLatency || 0) * 1000) + 'ms');
       audioCtx.addEventListener('statechange', () => { note('ton-' + audioCtx.state); if (audioCtx.state !== 'running' && document.visibilityState === 'visible') checkAudio(); });
     }
@@ -1103,9 +1106,13 @@
   }
 
   function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, isTouch ? 1.5 : 2);   // auf Tablets etwas gröber: flüssiger, schont den Akku
     const oldW = W;
     W = window.innerWidth; H = window.innerHeight;
+    let dpr = Math.min(window.devicePixelRatio || 1, isTouch ? 1.5 : 2);   // auf Tablets etwas gröber: flüssiger, schont den Akku
+    // Nie mehr Bildpunkte zeichnen als ein großer Full-HD-Bildschirm hat. Auf sehr scharfen Bildschirmen spart das
+    // mehr als die Hälfte der Rechenarbeit und lässt dem Gerät Luft für die Übertragung auf Beamer oder Fernseher.
+    const MAX_PIXELS = 2.4e6;
+    if (W && H && W * H * dpr * dpr > MAX_PIXELS) dpr = Math.max(1, Math.sqrt(MAX_PIXELS / (W * H)));
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     S = Math.min(W, H) / 620;
@@ -2164,10 +2171,11 @@
   }
   // Sichtbarer Tab: Die Animation gibt den Takt vor.
   function frame(now) {
+    requestAnimationFrame(frame);
+    if (now - lastRaf < 12) return;            // höchstens 60 Bilder pro Sekunde, auch auf Bildschirmen mit 120
     lastRaf = now;
     step(now, true);
     draw();
-    requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
   // Tab im Hintergrund: Der Browser hält die Animation an. Dann treibt der Taktgeber aus dem Ton die Messung
