@@ -243,12 +243,15 @@
     </div>
 
     <div class="title">Klänge für die Arbeitsphase</div>
-    <label class="opt"><input type="checkbox" id="sndMusic"> Entspannungsmusik</label>
-    <label class="opt"><input type="checkbox" id="sndOcean"> Meeresrauschen</label>
-    <label class="opt"><input type="checkbox" id="sndRain"> Regen</label>
-    <label for="sndVol">Lautstärke der Klänge</label>
-    <input type="range" id="sndVol" min="0" max="100" value="50">
-    <p class="note" style="margin-top:4px">Der Axolotl hört diese Klänge nicht mit. Am besten nicht zu laut stellen.</p>
+    <div id="sndBox">
+      <label class="opt"><input type="checkbox" id="sndMusic"> Entspannungsmusik</label>
+      <label class="opt"><input type="checkbox" id="sndOcean"> Meeresrauschen</label>
+      <label class="opt"><input type="checkbox" id="sndRain"> Regen</label>
+      <label for="sndVol">Lautstärke der Klänge</label>
+      <input type="range" id="sndVol" min="0" max="100" value="50">
+      <p class="note" style="margin-top:4px">Der Axolotl hört diese Klänge nicht mit. Am besten nicht zu laut stellen.</p>
+    </div>
+    <p class="note" id="sndNo" style="margin-top:0" hidden>Musik, Meeresrauschen und Regen gibt es in Google Chrome auf einem Laptop oder Rechner. In Safari und auf iPad oder iPhone kann der Axolotl sie nicht von den Geräuschen der Klasse unterscheiden.</p>
 
     <div class="title">Sitzung</div>
     <p class="note" id="sesInfo" style="margin-top:0">Keine Sitzung gestartet.</p>
@@ -357,7 +360,7 @@
   // ---------- Tablet ----------
   const isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
   // Fassung dieser Datei, klein im Startfenster: So lässt sich auf jedem Gerät sehen, ob die neueste Fassung läuft
-  const VERSION = '15.11.2026 · 13';
+  const VERSION = '15.11.2026 · 14';
   $('ver').textContent = 'Fassung ' + VERSION;
   if (isTouch) document.body.classList.add('touch');
   // Smartphone: kurze Bildschirmseite deutlich kleiner als bei einem Tablet
@@ -509,6 +512,10 @@
   // Echo-Unterdrückung eingeschaltet wird, kommt dort kein Geräusch mehr an, auch nicht nach dem Ausschalten.
   // Dort bleibt das Mikrofon deshalb unverändert; der eigene Klang wird nur von der App selbst abgezogen.
   const isSafariKind = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg\//.test(navigator.userAgent);
+  // In Safari gibt es die Klänge deshalb gar nicht: Dort ließ sich weder das Abziehen noch ein flüssiger Ton
+  // über AirPlay erreichen. Der Axolotl selbst funktioniert dort ohne Klänge.
+  const soundsOff = isSafariKind && new URLSearchParams(location.search).get('klaenge') !== '1';
+  if (soundsOff) { $('sndBox').hidden = true; $('sndNo').hidden = false; }
   async function setMicEcho(on) {
     if (isSafariKind) return;
     if (demoMode || !micStream || micEc === on) return;
@@ -645,7 +652,9 @@
     // Musik: weiche Klangflächen mit etwas Hall (verzögertes Echo mit Rückkopplung)
     {
       const out = bus('musicG'), dl = ac.createDelay(1), fb = gain(0.48), tone = filt('lowpass', 1700), wet = gain(0.55);
-      snd.musicIn = gain(1);
+      // Die Musik besteht aus tiefen Tönen, die das Ohr und kleine Lautsprecher viel schwächer wiedergeben als das
+      // helle Rauschen von Meer und Regen. Sie wird deshalb kräftiger eingespeist.
+      snd.musicIn = gain(1.9);
       snd.musicIn.connect(out);
       dl.delayTime.value = 0.43;
       snd.musicIn.connect(dl); dl.connect(tone); tone.connect(fb); fb.connect(dl); tone.connect(wet); wet.connect(out);
@@ -670,14 +679,15 @@
     const f = PAD_NOTES[i], att = (early ? 7 : 5) + Math.random() * 3, hold = 4 + Math.random() * 5, rel = 7 + Math.random() * 4;
     const peak = (f < 120 ? 0.11 : 0.075) * (0.8 + Math.random() * 0.4);
     const env = ac.createGain(), lp = ac.createBiquadFilter();
-    lp.type = 'lowpass'; lp.frequency.value = 1100;
+    lp.type = 'lowpass'; lp.frequency.value = 1500;
     env.gain.setValueAtTime(0, t);
     env.gain.linearRampToValueAtTime(peak, t + att);
     env.gain.setValueAtTime(peak, t + att + hold);
     env.gain.linearRampToValueAtTime(0, t + att + hold + rel);
     // Der zweite Ton liegt nur einen Hauch daneben: Das ergibt ein sehr langsames, gleichmäßiges Schweben,
     // bei hohen Tönen nicht schneller als bei tiefen
-    for (const [mul, add, type, lvl] of [[1, 0, 'sine', 1], [1, 0.22, 'sine', 0.6], [2, 0, 'triangle', 0.15]]) {
+    // Obertöne (doppelte und dreifache Tonhöhe) machen auch die tiefen Töne auf kleinen Lautsprechern hörbar
+    for (const [mul, add, type, lvl] of [[1, 0, 'sine', 1], [1, 0.22, 'sine', 0.6], [2, 0, 'triangle', 0.34], [3, 0.3, 'sine', 0.12]]) {
       const o = ac.createOscillator(), og = ac.createGain();
       o.type = type; o.frequency.value = f * mul + add; og.gain.value = lvl;
       o.connect(og); og.connect(lp);
@@ -752,6 +762,7 @@
   }
   // Nach dem Start der App: die Klänge wieder einschalten, die zuletzt liefen
   function restoreSounds() {
+    if (soundsOff) return;
     try {
       const was = JSON.parse(store.get('axo.snd', '') || '{}');
       for (const [id, name] of SOUND_BOXES) {
