@@ -203,6 +203,17 @@
     <p class="ver" id="ver"></p>
   </div>
 </div>
+<script>
+  // Läuft noch eine gespeicherte Sitzung, bleibt das Startfenster zunächst unsichtbar (sonst blitzt es beim Neuladen auf)
+  try {
+    var o = JSON.parse(localStorage.getItem('axo.session') || 'null');
+    if (o && o.on && Date.now() - o.savedAt < 12 * 3600 * 1000) {
+      document.getElementById('start').style.visibility = 'hidden';
+      // Sicherheitsnetz: spätestens nach vier Sekunden wieder zeigen, falls es nicht von selbst weitergeht
+      setTimeout(function () { document.getElementById('start').style.visibility = ''; }, 4000);
+    }
+  } catch (e) { /* kein gespeicherter Stand */ }
+</script>
 
 <div id="panel">
   <button id="toggle" title="Einstellungen ein- oder ausblenden" aria-label="Einstellungen ein- oder ausblenden">⚙︎</button>
@@ -346,7 +357,7 @@
   // ---------- Tablet ----------
   const isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
   // Fassung dieser Datei, klein im Startfenster: So lässt sich auf jedem Gerät sehen, ob die neueste Fassung läuft
-  const VERSION = '15.11.2026 · 12';
+  const VERSION = '15.11.2026 · 13';
   $('ver').textContent = 'Fassung ' + VERSION;
   if (isTouch) document.body.classList.add('touch');
   // Smartphone: kurze Bildschirmseite deutlich kleiner als bei einem Tablet
@@ -494,7 +505,12 @@
   // sonst abgeschaltet. Das Mikrofon wird dafür nie neu geöffnet, damit der Browser nicht erneut um Erlaubnis fragt.
   // Kann der Browser die Einstellung nicht im laufenden Betrieb ändern, bleibt alles, wie es ist; das Herausrechnen
   // der eigenen Klänge (cleanMic) funktioniert auch ohne.
+  // Safari (und damit jeder Browser auf iPad und iPhone) verträgt das Umstellen des Mikrofons nicht: Sobald die
+  // Echo-Unterdrückung eingeschaltet wird, kommt dort kein Geräusch mehr an, auch nicht nach dem Ausschalten.
+  // Dort bleibt das Mikrofon deshalb unverändert; der eigene Klang wird nur von der App selbst abgezogen.
+  const isSafariKind = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg\//.test(navigator.userAgent);
   async function setMicEcho(on) {
+    if (isSafariKind) return;
     if (demoMode || !micStream || micEc === on) return;
     micEc = on;
     for (const t of micStream.getAudioTracks()) {
@@ -2260,14 +2276,17 @@
   // Mikrofon schon freigegeben hat. Sonst zeigt das Startfenster „Sitzung fortsetzen".
   async function autoResume() {
     const o = storedSes();
-    if (!o) return;
+    if (!o) { $('start').style.visibility = ''; return; }
     note('neu-geladen-mit-sitzung');
-    if (o.demo) { demoMode = true; begin(); return; }
+    if (o.demo) { demoMode = true; begin(); $('start').style.visibility = ''; return; }
     $('btnMic').textContent = 'Sitzung fortsetzen';
+    // Das Startfenster bleibt unsichtbar, bis feststeht, ob es ohne Nachfrage weitergeht – sonst blitzt es kurz auf
+    $('start').style.visibility = 'hidden';
     try {
       const p = await navigator.permissions.query({ name: 'microphone' });
       if (p.state === 'granted') await startMic();
     } catch { /* Browser kennt die Abfrage nicht: Startfenster bleibt */ }
+    $('start').style.visibility = '';
   }
   st.autoResume = autoResume; st.diag = diag;
   autoResume();
