@@ -40,6 +40,7 @@
   #start h1 { margin: 0 0 10px; font-size: 32px; }
   #start p { margin: 0 0 22px; font-size: 18px; line-height: 1.45; }
   #start .hint { font-size: 14px; color: #55707d; margin: 18px 0 0; }
+  #start .ver { font-size: 11px; color: #8aa0aa; margin: 8px 0 0; }
   /* Hinweis nur auf Smartphones */
   #start .phoneTip { background: #e3f2f0; color: #12303f; border-radius: 12px; padding: 10px 14px; font-size: 15px; line-height: 1.4; margin: 0 0 18px; }
   #start .phoneTip[hidden] { display: none; }
@@ -199,6 +200,7 @@
     <button class="primary" id="btnMic">Mikrofon starten</button>
     <p style="margin:14px 0 0"><button class="secondary" id="btnDemo">Ohne Mikrofon ausprobieren</button></p>
     <p class="hint">Es wird nichts aufgenommen oder gespeichert. Die App misst nur, wie laut es gerade ist.</p>
+    <p class="ver" id="ver"></p>
   </div>
 </div>
 
@@ -343,6 +345,9 @@
 
   // ---------- Tablet ----------
   const isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
+  // Fassung dieser Datei, klein im Startfenster: So lässt sich auf jedem Gerät sehen, ob die neueste Fassung läuft
+  const VERSION = '15.11.2026 · 8';
+  $('ver').textContent = 'Fassung ' + VERSION;
   if (isTouch) document.body.classList.add('touch');
   // Smartphone: kurze Bildschirmseite deutlich kleiner als bei einem Tablet
   const isPhone = isTouch && Math.min(screen.width, screen.height) <= 500;
