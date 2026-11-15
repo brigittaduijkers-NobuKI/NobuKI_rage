@@ -33,6 +33,10 @@
     background: #fdf8ee; border-radius: 24px; padding: 36px 40px; max-width: 520px; width: 100%;
     text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.35);
   }
+  /* NobuKI-Logo auf dem Startfenster, dezent */
+  .brand { display: flex; flex-direction: column; align-items: center; margin: -8px 0 12px; opacity: 0.85; }
+  .brand img { width: 104px; height: auto; display: block; }
+  .brand span { color: #2bbfb0; font-weight: 700; font-size: 18px; letter-spacing: 0.3px; margin-top: 2px; }
   #start h1 { margin: 0 0 10px; font-size: 32px; }
   #start p { margin: 0 0 22px; font-size: 18px; line-height: 1.45; }
   #start .hint { font-size: 14px; color: #55707d; margin: 18px 0 0; }
@@ -58,10 +62,22 @@
   #panel.collapsed { width: auto; padding: 6px; background: rgba(253, 248, 238, 0.45); }
   #panel label { display: block; font-weight: 600; margin: 10px 0 4px; }
   #panel input[type=range] { width: 100%; accent-color: #e0568a; }
+  #panel select { width: 100%; font: inherit; padding: 6px 8px; border-radius: 10px; border: 1px solid #b9c6c9; background: #fff; color: inherit; }
   #panel .row { display: flex; gap: 8px; margin-top: 12px; }
   #panel .small { padding: 8px 12px; font-size: 14px; background: #1b6f93; color: #fff; flex: 1; }
-  #toggle { background: transparent; padding: 4px 8px; font-size: 20px; line-height: 1; }
-  #panel:not(.collapsed) #toggle { float: right; margin: -6px -8px 0 0; }
+  #toggle { background: transparent; padding: 4px 8px; font-size: 20px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+  #toggle svg { width: 16px; height: 16px; display: block; }
+  /* Aufgeklappt: rundes Kreuz oben rechts zum Schließen */
+  #panel:not(.collapsed) #toggle {
+    float: right; margin: -4px -6px 0 8px; width: 32px; height: 32px; padding: 0; border-radius: 50%;
+    background: #e6eef0; color: #12303f;
+    position: sticky; top: 0; z-index: 2;       /* bleibt sichtbar, auch wenn die Leiste gescrollt wird */
+  }
+  #panel:not(.collapsed) #toggle:hover { background: #d3e0e4; }
+  #panel input[type=checkbox] { accent-color: #e0568a; margin: 0; width: 16px; height: 16px; }
+  body.touch #panel input[type=checkbox] { width: 24px; height: 24px; }
+  body.touch #panel:not(.collapsed) #toggle { width: 48px; height: 48px; }
+  body.touch #panel:not(.collapsed) #toggle svg { width: 22px; height: 22px; }
   .scale { display: flex; justify-content: space-between; color: #55707d; font-size: 12px; }
   #meter { position: relative; height: 14px; border-radius: 7px; background: #d9e6ea; overflow: hidden; }
   #meterFill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, #58c38a, #f2c94c 60%, #e0568a); }
@@ -85,9 +101,34 @@
   body.touch #panel label.opt { min-height: 46px; margin: 0; gap: 12px; }
   body.touch #panel input[type=radio] { width: 24px; height: 24px; }
   body.touch #panel input[type=range] { height: 44px; }
+  body.touch #panel select { min-height: 46px; font-size: 16px; }
   body.touch #panel .small { padding: 14px 16px; font-size: 16px; }
   body.touch .scale { font-size: 13px; }
   body.touch .note { font-size: 14px; }
+
+  /* Abschluss einer Sitzung */
+  #result {
+    position: fixed; inset: 0; z-index: 12; display: flex; align-items: center; justify-content: center;
+    background: rgba(8, 48, 70, 0.78); padding: 16px; overflow-y: auto;
+  }
+  #result[hidden] { display: none; }
+  #result .card {
+    background: #fdf8ee; border-radius: 24px; padding: 28px 34px; max-width: 620px; width: 100%;
+    text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.35); -webkit-user-select: text; user-select: text;
+  }
+  #result h2 { margin: 0 0 12px; font-size: 30px; }
+  #resShells { display: flex; justify-content: center; gap: 8px; margin: 4px 0 8px; }
+  #resShells svg { width: 64px; height: 64px; }
+  #resHead { font-size: 22px; font-weight: 600; margin: 0 0 16px; }
+  #resStats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 16px; text-align: left; }
+  #resStats div { background: #eef4f1; border-radius: 14px; padding: 10px 14px; }
+  #resStats b { display: block; font-size: 22px; }
+  #resStats span { font-size: 14px; color: #55707d; }
+  #resMsg { margin: 0 0 16px; font-size: 16px; line-height: 1.4; min-height: 1.4em; }
+  #result .btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  #result .plain { background: #dde8ec; color: #12303f; }
+  button:disabled { opacity: 0.55; cursor: default; }
+  @media (max-width: 520px) { #resStats { grid-template-columns: 1fr; } #resShells svg { width: 48px; height: 48px; } }
 
   /* Hochformat: bitte quer drehen */
   #rotate {
@@ -104,6 +145,7 @@
 
 <div id="start">
   <div class="card">
+    <div class="brand"><img id="brandLogo" alt="" width="300" height="140"><span>NobuKI</span></div>
     <h1>Pssst … der Axolotl ruht sich aus</h1>
     <p>Wenn es im Raum leise ist, bleibt er entspannt liegen. Wird es laut, wird er unruhig.</p>
     <div id="error"></div>
@@ -140,11 +182,44 @@
       <input type="range" id="demo" min="0" max="100" value="0">
     </div>
 
+    <div class="title">Klänge für die Arbeitsphase</div>
+    <label class="opt"><input type="checkbox" id="sndMusic"> Entspannungsmusik</label>
+    <label class="opt"><input type="checkbox" id="sndOcean"> Meeresrauschen</label>
+    <label class="opt"><input type="checkbox" id="sndRain"> Regen</label>
+    <label for="sndVol">Lautstärke der Klänge</label>
+    <input type="range" id="sndVol" min="0" max="100" value="50">
+    <p class="note" style="margin-top:4px">Der Axolotl hört diese Klänge nicht mit. Am besten nicht zu laut stellen.</p>
+
+    <div class="title">Sitzung</div>
+    <p class="note" id="sesInfo" style="margin-top:0">Keine Sitzung gestartet.</p>
+    <div class="row">
+      <button class="small" id="btnSes">Sitzung starten</button>
+      <button class="small" id="btnPause" hidden>Pause</button>
+    </div>
+    <label for="minSel" style="margin-top:12px">Muscheln gibt es ab <span id="minOut">15 Minuten</span></label>
+    <input type="range" id="minSel" min="5" max="60" step="5" value="15">
+    <div class="scale"><span>5 Min.</span><span>60 Min.</span></div>
+    <p class="note" style="margin-top:6px">Zum Pausieren einfach auf das Bild tippen. Pausen zählen nicht mit.</p>
+
     <div class="row" id="fullRow">
       <button class="small" id="btnFull">Vollbild</button>
     </div>
     <p class="note" id="fsHint" hidden>Für die Ansicht ohne Browserleisten: im Teilen-Menü „Zum Home-Bildschirm" wählen und die App von dort starten.</p>
     <p class="note" id="sleepHint" hidden>Damit der Bildschirm nicht ausgeht: bitte die automatische Sperre des Tablets ausschalten.</p>
+  </div>
+</div>
+
+<div id="result" hidden>
+  <div class="card" role="dialog" aria-labelledby="resTitle">
+    <h2 id="resTitle">So war eure Sitzung</h2>
+    <div id="resShells" aria-hidden="true"></div>
+    <p id="resHead"></p>
+    <div id="resStats"></div>
+    <p id="resMsg"></p>
+    <div class="btns">
+      <button class="primary" id="btnAward" hidden>Muscheln vergeben</button>
+      <button class="plain" id="btnResClose">Schließen</button>
+    </div>
   </div>
 </div>
 
@@ -158,6 +233,13 @@
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
   const lerp = (a, b, t) => a + (b - a) * t;
   const smooth = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0)); return t * t * (3 - 2 * t); };
+
+  // ---------- NobuKI-Logo ----------
+  // Das Original-Logo von nobuki.de (auf die Zeichnung zugeschnitten), direkt in die Datei eingebettet
+  const LOGO_SRC = 'data:image/png;base64,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';
+  const logoImg = new Image();
+  logoImg.src = LOGO_SRC;
+  $('brandLogo').src = LOGO_SRC;
 
   // ---------- Einstellungen ----------
   const store = {
@@ -233,6 +315,30 @@
     $('start').style.display = 'flex';
   }
 
+  const getCtx = () => audioCtx || (audioCtx = new (window.AudioContext || window.webkitAudioContext)());
+  let micStream = null, micSrc = null, micEc = false;
+  // Mikrofon an die Messung anschließen; ein vorheriges Mikrofon wird sauber abgelöst
+  function useMicStream(stream) {
+    if (micStream) micStream.getAudioTracks().forEach(t => { t.removeEventListener('ended', micLost); t.stop(); });
+    if (micSrc) { try { micSrc.disconnect(); } catch { /* schon getrennt */ } }
+    micStream = stream;
+    micSrc = getCtx().createMediaStreamSource(stream);
+    micSrc.connect(analyser);
+    stream.getAudioTracks().forEach(t => t.addEventListener('ended', micLost));
+  }
+  // Laufen eigene Klänge, wird das Mikrofon mit der Echo-Unterdrückung des Browsers geöffnet, sonst ohne.
+  // Klappt der Wechsel nicht, bleibt das bisherige Mikrofon einfach in Betrieb.
+  async function setMicEcho(on) {
+    if (demoMode || !micStream || micEc === on) return;
+    micEc = on;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: on, noiseSuppression: false, autoGainControl: false }
+      });
+      if (micEc === on) useMicStream(stream); else stream.getAudioTracks().forEach(t => t.stop());
+    } catch { /* bisheriges Mikrofon bleibt */ }
+  }
+
   async function startMic() {
     const err = $('error');
     err.style.display = 'none';
@@ -241,15 +347,11 @@
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
       });
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (audioCtx) audioCtx.close().catch(() => {});
-      const ac = audioCtx = new AC();
+      const ac = getCtx();                     // derselbe Ton-Kontext wie für die Klänge
       await ac.resume();
-      analyser = ac.createAnalyser();
-      analyser.fftSize = 2048;
-      ac.createMediaStreamSource(stream).connect(analyser);
-      stream.getAudioTracks().forEach(t => t.addEventListener('ended', micLost));
-      buf = new Float32Array(analyser.fftSize);
+      if (!analyser) { analyser = ac.createAnalyser(); analyser.fftSize = 2048; buf = new Float32Array(analyser.fftSize); }
+      useMicStream(stream);
+      micEc = false;
       begin();
     } catch (e) {
       const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
@@ -269,12 +371,23 @@
     $('panel').style.display = 'block';
     $('demoRow').style.display = demoMode ? 'block' : 'none';
     if (isTouch) $('panel').classList.add('collapsed');      // auf Tablets verdeckt die Leiste sonst das Becken
+    syncToggle();
     keepAwake();
+    restoreSes();
   }
 
   $('btnMic').addEventListener('click', startMic);
   $('btnDemo').addEventListener('click', () => { demoMode = true; begin(); });
-  $('toggle').addEventListener('click', () => $('panel').classList.toggle('collapsed'));
+  // Leiste: eingeklappt ein Zahnrad zum Öffnen, aufgeklappt ein Kreuz zum Schließen
+  const syncToggle = () => {
+    const closed = $('panel').classList.contains('collapsed'), t = $('toggle');
+    t.innerHTML = closed ? '⚙︎'
+      : '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3 L13 13 M13 3 L3 13" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>';
+    t.title = closed ? 'Einstellungen öffnen' : 'Einstellungen schließen';
+    t.setAttribute('aria-label', t.title);
+  };
+  $('toggle').addEventListener('click', () => { $('panel').classList.toggle('collapsed'); syncToggle(); });
+  syncToggle();
   // Vollbild, mit Ersatzweg für Safari. Ohne Vollbild-Funktion: Hinweis auf den Home-Bildschirm.
   const rootEl = document.documentElement;
   const fsRequest = rootEl.requestFullscreen || rootEl.webkitRequestFullscreen;
@@ -291,15 +404,178 @@
       if (p && p.catch) p.catch(() => {});
     } catch { /* Vollbild nicht erlaubt */ }
   });
+  // Der Knopf sagt immer, was er gerade tut
+  const syncFullLabel = () => { $('btnFull').textContent = fsActive() ? 'Vollbildmodus verlassen' : 'Vollbild'; };
+  document.addEventListener('fullscreenchange', syncFullLabel);
+  document.addEventListener('webkitfullscreenchange', syncFullLabel);
+
+  // ---------- Klänge für die Arbeitsphase ----------
+  // Musik, Meeresrauschen und Regen werden direkt im Browser erzeugt (keine Tondateien).
+  const snd = { on: { music: false, ocean: false, rain: false }, built: false,
+                g: Infinity, micS: 0, outS: 0, t: 0, graceUntil: 0, fakeMic: null };
+  const sndAny = () => snd.on.music || snd.on.ocean || snd.on.rain;
+  const sndVolume = () => { const v = $('sndVol').value / 100; return v * v * 1.25; };
+
+  function buildSound() {
+    const ac = getCtx();
+    snd.master = ac.createGain(); snd.master.gain.value = sndVolume();   // Lautstärkeregler
+    snd.fade = ac.createGain(); snd.fade.gain.value = 1;                 // blendet in der Pause aus
+    // Begrenzer am Ausgang: Auch alle drei Klänge zusammen bei voller Lautstärke übersteuern nicht
+    const lim = ac.createDynamicsCompressor();
+    lim.threshold.value = -10; lim.knee.value = 8; lim.ratio.value = 14; lim.attack.value = 0.004; lim.release.value = 0.25;
+    snd.master.connect(snd.fade); snd.fade.connect(lim); lim.connect(ac.destination);
+    snd.outAn = ac.createAnalyser(); snd.outAn.fftSize = 2048;           // misst, wie laut die App selbst spielt
+    lim.connect(snd.outAn); snd.obuf = new Float32Array(2048);
+
+    const len = Math.floor(ac.sampleRate * 4), nb = ac.createBuffer(1, len, ac.sampleRate), d = nb.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const noise = () => { const s = ac.createBufferSource(); s.buffer = nb; s.loop = true; s.loopStart = Math.random() * 2; s.start(); return s; };
+    const filt = (type, f, q) => { const b = ac.createBiquadFilter(); b.type = type; b.frequency.value = f; if (q) b.Q.value = q; return b; };
+    const gain = v => { const n = ac.createGain(); n.gain.value = v; return n; };
+    const bus = name => { const n = gain(0); n.connect(snd.master); snd[name] = n; return n; };
+    const lfo = (f, depth, target) => { const o = ac.createOscillator(); o.frequency.value = f; const dg = gain(depth); o.connect(dg); dg.connect(target); o.start(); };
+
+    // Meeresrauschen: dunkles Rauschen, das in langsamen, unregelmäßigen Wellen an- und abschwillt, dazu leise Gischt
+    {
+      const out = bus('oceanG'), lp = filt('lowpass', 620, 0.7), wave = gain(0.34);
+      noise().connect(lp); lp.connect(wave); wave.connect(out);
+      lfo(0.085, 0.22, wave.gain); lfo(0.137, 0.1, wave.gain); lfo(0.085, 300, lp.frequency);
+      const hp = filt('highpass', 2400), foam = gain(0.035);
+      noise().connect(hp); hp.connect(foam); foam.connect(out); lfo(0.085, 0.03, foam.gain);
+    }
+    // Regen: gleichmäßiges helles Rauschen, darunter ein leises dunkles Rauschen; die Tropfen kommen einzeln dazu
+    {
+      const out = bus('rainG'), hp = filt('highpass', 950), lp = filt('lowpass', 7500), body = gain(0.15);
+      noise().connect(hp); hp.connect(lp); lp.connect(body); body.connect(out);
+      const low = filt('lowpass', 320), lowG = gain(0.1);
+      noise().connect(low); low.connect(lowG); lowG.connect(out);
+    }
+    // Musik: weiche Klangflächen mit etwas Hall (verzögertes Echo mit Rückkopplung)
+    {
+      const out = bus('musicG'), dl = ac.createDelay(1), fb = gain(0.48), tone = filt('lowpass', 1700), wet = gain(0.55);
+      snd.musicIn = gain(1);
+      snd.musicIn.connect(out);
+      dl.delayTime.value = 0.43;
+      snd.musicIn.connect(dl); dl.connect(tone); tone.connect(fb); fb.connect(dl); tone.connect(wet); wet.connect(out);
+    }
+    snd.built = true;
+  }
+
+  // Musik: Alle paar Sekunden setzt ein neuer, lang gehaltener Ton ein und blendet langsam wieder aus.
+  // Die Töne stammen aus einer ruhigen Tonleiter und werden zufällig gewählt, darum wiederholt sich nichts genau.
+  const PAD_NOTES = [65.41, 98.0, 130.81, 164.81, 196.0, 220.0, 261.63, 293.66, 329.63, 392.0];
+  let lastNote = -1, musicTimer = 0, rainTimer = 0;
+  function musicVoice() {
+    const ac = getCtx(), t = ac.currentTime + 0.05;
+    let i;
+    do { i = Math.floor(Math.random() * PAD_NOTES.length); } while (i === lastNote);
+    lastNote = i;
+    const f = PAD_NOTES[i], att = 4 + Math.random() * 3, hold = 4 + Math.random() * 5, rel = 6 + Math.random() * 4;
+    const peak = (f < 120 ? 0.11 : 0.075) * (0.8 + Math.random() * 0.4);
+    const env = ac.createGain(), lp = ac.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 1100;
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(peak, t + att);
+    env.gain.setValueAtTime(peak, t + att + hold);
+    env.gain.linearRampToValueAtTime(0, t + att + hold + rel);
+    for (const [mul, type, lvl] of [[1, 'sine', 1], [1.004, 'sine', 0.7], [2, 'triangle', 0.18]]) {
+      const o = ac.createOscillator(), og = ac.createGain();
+      o.type = type; o.frequency.value = f * mul; og.gain.value = lvl;
+      o.connect(og); og.connect(lp);
+      o.start(t); o.stop(t + att + hold + rel + 0.2);
+    }
+    lp.connect(env); env.connect(snd.musicIn);
+  }
+  function musicLoop() {
+    clearTimeout(musicTimer);
+    if (!snd.on.music) return;
+    musicVoice();
+    musicTimer = setTimeout(musicLoop, 3500 + Math.random() * 3500);
+  }
+  // Regentropfen: viele kurze, helle Tupfer zu zufälligen Zeiten
+  function rainLoop() {
+    clearTimeout(rainTimer);
+    if (!snd.on.rain) return;
+    const ac = getCtx(), t0 = ac.currentTime;
+    for (let n = 0; n < 6; n++) {
+      const t = t0 + 0.02 + Math.random() * 0.45, f = 1400 + Math.random() * 2800;
+      const o = ac.createOscillator(), og = ac.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.6, t + 0.05);
+      og.gain.setValueAtTime(0, t);
+      og.gain.linearRampToValueAtTime(0.012 + Math.random() * 0.022, t + 0.004);
+      og.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+      o.connect(og); og.connect(snd.rainG);
+      o.start(t); o.stop(t + 0.08);
+    }
+    rainTimer = setTimeout(rainLoop, 450);
+  }
+
+  function setSound(name, on) {
+    if (!snd.built) buildSound();
+    const ac = getCtx();
+    ac.resume().catch(() => {});
+    snd.on[name] = on;
+    const node = snd[name + 'G'], t = ac.currentTime;
+    node.gain.cancelScheduledValues(t);
+    node.gain.setTargetAtTime(on ? 1 : 0, t, 0.6);           // sanft ein- und ausblenden, nie ein Knacken
+    if (name === 'music' && on) { musicLoop(); setTimeout(() => { if (snd.on.music) musicVoice(); }, 1500); }
+    if (name === 'rain' && on) rainLoop();
+    // Nach jedem Umschalten kurz neu einmessen, wie stark die Klänge beim Mikrofon ankommen
+    snd.g = Infinity; snd.micS = 0; snd.outS = 0; snd.graceUntil = performance.now() + 3000;
+    setMicEcho(sndAny());
+  }
+  // In der Pause blenden die Klänge aus, beim Weitermachen wieder ein
+  function sndSyncPause() {
+    if (!snd.built) return;
+    const t = getCtx().currentTime, paused = ses.on && ses.paused;
+    snd.fade.gain.cancelScheduledValues(t);
+    snd.fade.gain.setTargetAtTime(paused ? 0 : 1, t, 0.7);
+    if (!paused) snd.graceUntil = Math.max(snd.graceUntil, performance.now() + 2500);
+  }
+  for (const [id, name] of [['sndMusic', 'music'], ['sndOcean', 'ocean'], ['sndRain', 'rain']]) {
+    $(id).addEventListener('change', e => setSound(name, e.target.checked));
+  }
+  $('sndVol').value = store.get('axo.sndVol', '50');
+  $('sndVol').addEventListener('input', () => {
+    store.set('axo.sndVol', $('sndVol').value);
+    if (snd.built) snd.master.gain.setTargetAtTime(sndVolume(), getCtx().currentTime, 0.08);
+  });
+
+  // Die App weiß, wie laut sie selbst gerade spielt, und zieht diesen Anteil von der Mikrofon-Messung ab.
+  // Wie stark der Lautsprecher beim Mikrofon ankommt (g), lernt sie selbst: Sie merkt sich den leisesten Moment
+  // im Verhältnis zum eigenen Klang. Der Wert darf langsam wieder steigen, damit sich eine geänderte
+  // Gerätelautstärke nach kurzer Zeit einpendelt.
+  function cleanMic(pow) {
+    if (!snd.built || !sndAny()) return pow;                 // ohne Klänge bleibt die Messung wie immer
+    snd.outAn.getFloatTimeDomainData(snd.obuf);
+    let o = 0;
+    for (let i = 0; i < snd.obuf.length; i++) o += snd.obuf[i] * snd.obuf[i];
+    o /= snd.obuf.length;
+    const now = performance.now(), dt = snd.t ? Math.min(0.2, (now - snd.t) / 1000) : 0.016;
+    snd.t = now;
+    const k = 1 - Math.exp(-dt / 0.35);
+    snd.outS += (o - snd.outS) * k; snd.micS += (pow - snd.micS) * k;
+    if (snd.outS < 1e-9) return pow;                          // gerade nichts zu hören (ausgeblendet)
+    snd.g = Math.min(snd.g === Infinity ? Infinity : snd.g * (1 + dt / 15), snd.micS / snd.outS);
+    if (now < snd.graceUntil) return 0;                       // beim Einmessen wird der Axolotl nicht aufgeschreckt
+    return Math.max(0, snd.micS - snd.g * snd.outS * 2);      // doppelter Abzug als Sicherheit gegen Schwankungen
+  }
 
   // Aktuelle Lautstärke als Wert 0..1 (0 = ruhig genug, 1 = zu laut)
   function readLevel() {
-    if (demoMode) return $('demo').value / 100;
-    if (!analyser) return 0;
-    analyser.getFloatTimeDomainData(buf);
-    let sum = 0;
-    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
-    const db = 20 * Math.log10(Math.sqrt(sum / buf.length) + 1e-7);
+    let pow;
+    if (snd.fakeMic) pow = snd.fakeMic();        // nur für Tests: künstliches Mikrofonsignal
+    else {
+      if (demoMode) return $('demo').value / 100;
+      if (!analyser) return 0;
+      analyser.getFloatTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+      pow = sum / buf.length;
+    }
+    pow = cleanMic(pow);                         // eigene Klänge herausrechnen
+    const db = 20 * Math.log10(Math.sqrt(pow) + 1e-7);
     const s = sens.value / 100;
     const quietDb = lerp(-32, -66, s);   // darunter: völlig ruhig
     const loudDb = quietDb + 26;         // darüber: zu laut
@@ -324,6 +600,156 @@
     outT: 0, noPrey: false, murk: 0, puffs: [], puffK: 0
   };
   window.axo = st;
+  st.snd = snd;                                 // für Tests einsehbar
+
+  // ---------- Sitzung und Statistik ----------
+  // Eine Sitzung zählt mit, wie ruhig die Klasse war. „Ruhig" ist nur die Zeit, in der der Axolotl schläft.
+  // Aus dem Anteil der Schlafzeit ergeben sich die Muscheln: ab 20 % eine, ab 40 % zwei, ab 60 % drei, ab 80 % vier, ab 95 % fünf.
+  // Die Lehrkraft wählt, wie lange eine Sitzung (ohne Pausen) mindestens laufen muss, bevor es Muscheln gibt.
+  // Die Wahl gilt für die ganze Sitzung und wird beim Start festgehalten.
+  // Schieberegler von 5 bis 60 Minuten in 5er-Schritten, voreingestellt immer 15 Minuten.
+  const minSel = $('minSel');
+  const minMinutes = () => clamp(Math.round(+minSel.value / 5) * 5, 5, 60);
+  const syncMinOut = () => { $('minOut').textContent = minMinutes() + ' Minuten'; };
+  minSel.value = '15';
+  minSel.addEventListener('input', syncMinOut);
+  syncMinOut();
+  const shellsFor = share => share >= 0.95 ? 5 : share >= 0.8 ? 4 : share >= 0.6 ? 3 : share >= 0.4 ? 2 : share >= 0.2 ? 1 : 0;
+  const newSes = () => ({ on: false, paused: false, id: null, startedAt: null, endedAt: null, minSeconds: 15 * 60,
+                          active: 0, sleep: 0, awake: 0, hunt: 0, wakeups: 0, attacks: 0, asleep: true, asleepFor: 0, saveT: 0 });
+  let ses = newSes(), sesMsgUntil = 0;
+  Object.defineProperty(st, 'ses', { get: () => ses });
+  const sesShare = () => ses.active > 0 ? ses.sleep / ses.active : 0;
+  const sesShells = () => ses.active >= ses.minSeconds ? shellsFor(sesShare()) : 0;
+  const fmtClock = s => {
+    s = Math.round(s);
+    const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+    return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0');
+  };
+  const fmtMin = s => { const m = Math.round(s / 60); return m < 1 ? 'unter 1 Minute' : m === 1 ? '1 Minute' : m + ' Minuten'; };
+  const pct = v => Math.round(v * 100) + ' %';
+
+  // Läuft die App eingebettet in NobuKI (gleiche Adresse), kann sie das Ergebnis dorthin melden
+  const embedded = window.parent !== window && new URLSearchParams(location.search).get('embed') === 'nobuki';
+  const toHost = msg => { if (embedded) window.parent.postMessage(Object.assign({ app: 'leise-axolotl' }, msg), location.origin); };
+
+  function saveSes() { store.set('axo.session', ses.on ? JSON.stringify(Object.assign({}, ses, { savedAt: Date.now() })) : ''); }
+  function restoreSes() {
+    // Nach versehentlichem Neuladen: Sitzung wiederherstellen, aber pausiert, damit die Lücke nicht mitzählt
+    try {
+      const o = JSON.parse(store.get('axo.session', '') || 'null');
+      if (o && o.on && Date.now() - o.savedAt < 12 * 3600 * 1000) { ses = Object.assign(newSes(), o, { paused: true }); syncSesUi(); }
+    } catch { /* kein gespeicherter Stand */ }
+  }
+
+  function sesTick(sdt, a) {
+    if (!ses.on || ses.paused) return;
+    const was = ses.asleep;
+    if (ses.asleep && (a > 0.07 || st.sad > 0.1)) ses.asleep = false;          // Augen gehen auf
+    else if (!ses.asleep && a < 0.05 && st.sad < 0.05) ses.asleep = true;      // Augen fallen zu
+    if (was && !ses.asleep) { if (ses.asleepFor >= 5) ses.wakeups++; ses.asleepFor = 0; }   // Blinzeln zählt nicht
+    ses.active += sdt;
+    if (ses.asleep) { ses.sleep += sdt; ses.asleepFor += sdt; }
+    else { ses.awake += sdt; if (st.swim) ses.hunt += sdt; }
+    ses.saveT += sdt;
+    if (ses.saveT >= 5) { ses.saveT = 0; saveSes(); syncSesUi(); }
+  }
+
+  function syncSesUi() {
+    $('btnSes').textContent = ses.on ? 'Sitzung beenden' : 'Sitzung starten';
+    $('btnPause').hidden = !ses.on;
+    $('btnPause').textContent = ses.paused ? 'Weiter' : 'Pause';
+    sndSyncPause();
+    minSel.disabled = ses.on;                   // während der Sitzung gilt die beim Start gewählte Dauer
+    if (ses.on) { minSel.value = String(Math.round(ses.minSeconds / 60)); syncMinOut(); }
+    $('sesInfo').textContent = !ses.on ? 'Keine Sitzung gestartet.'
+      : ses.paused ? 'Pause. Gezählt bisher: ' + fmtClock(ses.active) + '.'
+      : 'Läuft seit ' + fmtClock(ses.active) + ', davon geschlafen ' + pct(sesShare()) + '.';
+  }
+
+  function sesStart() {
+    ses = newSes();
+    ses.on = true;
+    ses.id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 's' + Date.now() + Math.random().toString(16).slice(2);
+    ses.startedAt = new Date().toISOString();
+    ses.minSeconds = minMinutes() * 60;
+    ses.asleep = st.unruhe < 0.05 && st.sad < 0.05;
+    if (ses.asleep) ses.asleepFor = 5;          // er schlief schon vorher: Wacht er gleich auf, zählt das
+    else ses.wakeups = 1;                       // beim Start schon wach: zählt als einmal aufgewacht
+    sesMsgUntil = st.time + 10;                 // kurzer Hinweis im Bild, was jetzt gilt
+    saveSes(); syncSesUi();
+  }
+
+  const shellSvg = gold => '<svg viewBox="24 34 464 464" xmlns="http://www.w3.org/2000/svg">' +
+    '<path d="M256 122 C240 115 228 122 219 140 C199 124 181 128 171 147 C149 139 134 151 132 174 C108 171 95 188 102 209 C80 213 75 231 84 249 C116 315 188 373 256 398 C324 373 396 315 428 249 C437 231 432 213 410 209 C417 188 404 171 380 174 C378 151 363 139 341 147 C331 128 313 124 293 140 C284 122 272 115 256 122 Z" fill="' + (gold ? '#f6c445' : '#e3e9e6') + '" stroke="' + (gold ? '#a8701a' : '#b9c6c9') + '" stroke-width="12" stroke-linejoin="round"/>' +
+    '<g stroke="' + (gold ? '#d9992b' : '#c6d1d3') + '" stroke-width="9" stroke-linecap="round" fill="none">' +
+    ['Q178 315 102 209', 'Q190 284 132 174', 'Q218 253 171 147', 'Q240 251 219 140', 'Q272 251 293 140', 'Q294 253 341 147', 'Q322 284 380 174', 'Q334 315 410 209']
+      .map(q => '<path d="M256 383 ' + q + '"/>').join('') + '</g>' +
+    '<path d="M211 385 Q256 373 301 385 Q279 410 256 412 Q233 410 211 385 Z" fill="' + (gold ? '#e8a93a' : '#d5dedd') + '" stroke="' + (gold ? '#a8701a' : '#b9c6c9') + '" stroke-width="10" stroke-linejoin="round"/></svg>';
+
+  function sesEnd() {
+    if (!ses.on) return;
+    ses.on = false; ses.paused = false; ses.endedAt = new Date().toISOString();
+    saveSes(); syncSesUi();
+    const n = sesShells(), long = ses.active >= ses.minSeconds;
+    $('resShells').innerHTML = [0, 1, 2, 3, 4].map(i => shellSvg(i < n)).join('');
+    $('resHead').textContent = !long ? 'Diese Sitzung war kürzer als ' + Math.round(ses.minSeconds / 60) + ' Minuten. Dafür gibt es noch keine Muscheln.'
+      : n === 0 ? 'Diesmal hat es noch nicht für eine Muschel gereicht.'
+      : n === 1 ? 'Ihr habt 1 Muschel verdient!' : 'Ihr habt ' + n + ' Muscheln verdient!';
+    const cell = (big, small) => '<div><b>' + big + '</b><span>' + small + '</span></div>';
+    $('resStats').innerHTML =
+      cell(fmtMin(ses.active), 'hat die Sitzung gedauert (ohne Pausen)') +
+      cell(fmtMin(ses.sleep) + ' (' + pct(sesShare()) + ')', 'hat der Axolotl ruhig geschlafen') +
+      cell(fmtMin(ses.awake), 'war er wach und unruhig') +
+      cell(fmtMin(ses.hunt), 'davon war er auf der Jagd') +
+      cell(ses.wakeups + ' Mal', 'ist er aus dem Schlaf aufgewacht') +
+      cell(ses.attacks + ' Mal', 'hat er eine Garnele gefressen oder fast erwischt');
+    $('resMsg').textContent = embedded ? (n > 0 ? 'Jedes Kind der Klasse bekommt gleich viele Muscheln.' : '')
+      : (n > 0 ? 'Muscheln gibt es, wenn du den Axolotl in NobuKI startest.' : '');
+    $('btnAward').hidden = !(embedded && n > 0);
+    $('btnAward').disabled = false;
+    $('result').hidden = false;
+    toHost({ type: 'session-ended', sessionId: ses.id });
+  }
+
+  // Ergebnis an NobuKI melden. NobuKI rechnet die Muscheln selbst nach und bucht sie für die ganze Klasse.
+  let awardTimer = 0;
+  $('btnAward').addEventListener('click', () => {
+    $('btnAward').disabled = true;
+    $('resMsg').textContent = 'Die Muscheln werden gutgeschrieben …';
+    toHost({ type: 'session-result', sessionId: ses.id, startedAt: ses.startedAt, endedAt: ses.endedAt,
+             minSeconds: ses.minSeconds, activeSeconds: Math.round(ses.active), sleepSeconds: Math.round(ses.sleep), awakeSeconds: Math.round(ses.awake),
+             huntSeconds: Math.round(ses.hunt), wakeups: ses.wakeups, shrimpAttacks: ses.attacks, shells: sesShells() });
+    clearTimeout(awardTimer);
+    awardTimer = setTimeout(() => {
+      $('resMsg').textContent = 'NobuKI hat nicht geantwortet. Bitte noch einmal versuchen.';
+      $('btnAward').disabled = false;
+    }, 15000);
+  });
+  window.addEventListener('message', e => {
+    if (!embedded || e.origin !== location.origin || e.source !== window.parent) return;
+    const d = e.data;
+    if (!d || d.app !== 'leise-axolotl' || d.type !== 'award-result' || d.sessionId !== ses.id) return;
+    clearTimeout(awardTimer);
+    if (d.ok) {
+      $('btnAward').hidden = true;
+      $('resMsg').textContent = d.shells > 0
+        ? 'Geschafft! Jedes Kind hat ' + (d.shells === 1 ? '1 Muschel' : d.shells + ' Muscheln') + ' bekommen.' +
+          (d.shells < sesShells() ? ' Mehr ging heute nicht: Die Tagesgrenze ist erreicht.' : '')
+        : 'Heute gibt es keine weiteren Leise-Muscheln: Die Tagesgrenze ist erreicht.';
+    } else {
+      $('resMsg').textContent = 'Das Gutschreiben hat nicht geklappt. Bitte noch einmal versuchen.';
+      $('btnAward').disabled = false;
+    }
+  });
+
+  $('btnSes').addEventListener('click', () => { if (ses.on) sesEnd(); else sesStart(); });
+  const togglePause = () => { if (!ses.on) return; ses.paused = !ses.paused; sesMsgUntil = 0; saveSes(); syncSesUi(); };
+  $('btnPause').addEventListener('click', togglePause);
+  // Wie bei einem Video: Ein Tipp auf das Bild pausiert die Sitzung, ein Tipp auf das Pause-Zeichen setzt sie fort
+  canvas.addEventListener('click', () => { if (running) togglePause(); });
+  $('btnResClose').addEventListener('click', () => { $('result').hidden = true; ses = newSes(); saveSes(); syncSesUi(); });
+  toHost({ type: 'ready' });
 
   // ---------- Raum und Tiefe ----------
   let W = 0, H = 0, S = 1, backY = 0, frontY = 0;
@@ -409,11 +835,22 @@
           if (py > 0.65) py = 0.65 + (py - 0.65) * 0.3;         // unten flacher: liegt auf dem Sand
           pts.push([Math.cos(ang) * rad, py]);
         }
-        caves.push({ x: r.x + ox * r.w * k, h: ry * 0.75 * S, z: r.z, rx: rx * k, ry: ry * k, pts });
+        caves.push({ x: r.x + ox * r.w * k, h: ry * 0.75 * S, z: r.z, rx: rx * k, ry: ry * k, pts, rock: r });
       });
     }
   }
-  const caveLoad = i => st.shrimp.filter(q => (q.state === 'hidden' || q.state === 'flee') && q.cave === i).length;
+  const caveLoad = i => st.shrimp.filter(q => (q.state === 'hidden' || q.state === 'flee' || q.state === 'enter') && q.cave === i).length;
+  // Die Höhlen liegen an der Vorderseite der Steine. Der Punkt direkt vor dem Eingang: ein Stück vor dem Stein,
+  // im Bild aber genau auf der Öffnung. Nur über diesen Punkt geht es hinein und heraus.
+  const caveFront = c => {
+    const z = Math.min(0.97, c.z + 0.07);
+    return { x: c.x, z, h: Math.max(shrimpH(), (gy(z) - sy(c.h, c.z)) / zs(z)) };
+  };
+  const rockHalf = r => r.w * 0.5 * S * zs(r.z) + 18 * S;      // halbe Breite eines Steins im Bild, mit etwas Abstand
+  const rockSide = (r, x) => {                                  // auf welcher Seite man am Stein vorbeikommt
+    const hw = rockHalf(r), okL = r.x - hw > 30 * S, okR = r.x + hw < W - 30 * S;
+    return okL && okR ? (x >= r.x ? 1 : -1) : okR ? 1 : -1;
+  };
   function emptiestCave() {
     let best = 0, bl = Infinity;
     caves.forEach((c, i) => { const l = caveLoad(i) + Math.random() * 0.9; if (l < bl) { bl = l; best = i; } });
@@ -530,6 +967,9 @@
 
   function endSuck(eaten) {
     const s = st.suck, p = s.p;
+    // Statistik: Gezählt wird erst am Ende des Saugens, und nur wenn die Garnele gefressen wurde oder
+    // deutlich sichtbar im Sog war (fast erwischt). Ein kurzes Ansaugen, das sofort wieder abbricht, zählt nicht.
+    if (ses.on && !ses.paused && (eaten || s.t >= 1.2)) ses.attacks++;
     st.suck = null;
     st.snapCool = lerp(7, 4, clamp((st.unruhe - 0.45) / 0.55));
     p.sc = 1; p.al = 1;
@@ -539,7 +979,7 @@
       for (let i = 0; i < 3; i++) st.bubbles.push({ x: m.x + (i - 1) * 9 * S, h: m.h, z: m.z, r: (3 + i * 1.5) * S, t: -i * 0.25 });
     } else {
       if (s.mode === '1') { p.state = 'free'; retarget(p, st.unruhe, true); p.boost = 1.2; }   // „wird gefressen": kein Verstecken
-      else { p.state = 'flee'; p.cave = pickCave(p); }                                         // flitzt in eine Höhle
+      else { p.state = 'flee'; p.cave = pickCave(p); p.side = 0; }                             // flitzt in eine Höhle
     }
   }
 
@@ -602,12 +1042,18 @@
       if (st.outT >= 4) {                      // versteckte Garnelen trauen sich einzeln heraus
         st.outT = 0;
         const h = st.shrimp.find(q => q.state === 'hidden');
-        if (h) { h.state = 'free'; retarget(h, a); }
+        if (h) {                               // kommt vorn aus dem Eingang heraus
+          const E = caveFront(caves[h.cave] || caves[0]);
+          h.x = E.x; h.h = E.h; h.z = E.z; h.sc = 0.62; h.state = 'free'; retarget(h, a, true);
+        }
       }
       if (st.returnT >= 10) {                  // gefressene kommen aus den Höhlen zurück
         st.returnT = 0;
         const p = st.shrimp.find(q => q.state === 'gone');
-        if (p && caves.length) { const c = caves[emptiestCave()]; p.x = c.x; p.h = c.h; p.z = c.z; p.vx = p.vh = p.vzp = 0; p.state = 'free'; retarget(p, a); }
+        if (p && caves.length) {
+          const E = caveFront(caves[emptiestCave()]);
+          p.x = E.x; p.h = E.h; p.z = E.z; p.vx = p.vh = p.vzp = 0; p.sc = 0.62; p.state = 'free'; retarget(p, a, true);
+        }
       }
     } else { st.returnT = 0; st.outT = 0; }
 
@@ -621,12 +1067,33 @@
         p.ph += dt * 3;
         continue;
       }
+      if (p.state === 'enter') {               // schlüpft vorn in den Eingang: wird kleiner und verschwindet im Dunkeln
+        p.timer -= dt;
+        p.sc = lerp(0.62, 1, clamp(p.timer / 0.35)); p.al = clamp(p.timer / 0.2);
+        if (p.timer <= 0) { p.state = 'hidden'; p.sc = 1; p.al = 1; }
+        continue;
+      }
       let speed, tau;
       if (p.state === 'flee') {
-        const c = caves[p.cave] || caves[0];
-        p.tx = c.x; p.th = c.h; p.tz = c.z; speed = 440 * S; tau = 0.1;
-        if (dist3(c, p) < 16 * S) { p.state = 'hidden'; p.vx = p.vh = p.vzp = 0; continue; }
+        // Weg in die Höhle: immer von vorn. Ist sie noch hinter oder neben dem Stein, schwimmt sie erst
+        // seitlich am Stein vorbei, dann nach vorn, und erst dann vor den Eingang.
+        const c = caves[p.cave] || caves[0], r = c.rock, E = caveFront(c), hw = rockHalf(r);
+        speed = 440 * S; tau = 0.1;
+        if (p.z < E.z - 0.015) {
+          if (Math.abs(p.x - r.x) < hw) {
+            if (!p.side) p.side = rockSide(r, p.x);
+            p.tx = r.x + p.side * (hw + 20 * S); p.th = p.h; p.tz = p.z;
+          } else { p.tx = p.x; p.th = p.h; p.tz = E.z; }
+        } else {
+          p.side = 0;
+          p.tx = E.x; p.th = E.h; p.tz = E.z;
+          if (dist3(E, p) < 16 * S) {
+            p.state = 'enter'; p.timer = 0.35; p.vx = p.vh = p.vzp = 0; p.x = E.x; p.h = E.h; p.z = E.z;
+            continue;
+          }
+        }
       } else {
+        if (p.sc < 1) p.sc = Math.min(1, p.sc + dt * 1.6);     // gerade aus der Höhle gekommen: wächst auf volle Größe
         p.timer -= dt;
         if (p.timer <= 0 || (!p.hover && dist3({ x: p.tx, h: p.th, z: p.tz }, p) < 10 * S)) retarget(p, a);
         // Schwimmt in kleinen Schüben statt gleichmäßig
@@ -637,14 +1104,27 @@
           speed = 70 * S;
         }
       }
-      const dx = p.tx - p.x, dh = p.th - p.h, dzp = (p.tz - p.z) * DZ(), d = Math.hypot(dx, dh, dzp);
+      // Steine sind massiv: Liegt einer in der Tiefe zwischen ihr und dem Ziel und ist sie gerade vor oder hinter ihm,
+      // schwimmt sie erst seitlich daran vorbei.
+      let tx = p.tx, th = p.th, tz = p.tz;
+      for (const r of ROCKS) {
+        if ((r.z - p.z) * (tz - r.z) > 0 && Math.abs(p.x - r.x) < rockHalf(r)) {
+          tx = r.x + rockSide(r, p.x) * (rockHalf(r) + 20 * S); th = p.h; tz = p.z;
+          break;
+        }
+      }
+      const dx = tx - p.x, dh = th - p.h, dzp = (tz - p.z) * DZ(), d = Math.hypot(dx, dh, dzp);
       const want = d > 1 ? Math.min(speed, d * 3) : 0;
       const f = 1 - Math.exp(-dt / tau);
       p.vx += ((d > 1 ? dx / d * want : 0) - p.vx) * f;
       p.vh += ((d > 1 ? dh / d * want : 0) - p.vh) * f;
       p.vzp += ((d > 1 ? dzp / d * want : 0) - p.vzp) * f;
       p.x += p.vx * dt;
-      p.z = clamp(p.z + p.vzp / DZ() * dt, 0.03, 0.97);
+      let nz = clamp(p.z + p.vzp / DZ() * dt, 0.03, 0.97);
+      for (const r of ROCKS) {                 // feste Regel: nie durch einen Stein hindurch
+        if ((p.z - r.z) * (nz - r.z) < 0 && Math.abs(p.x - r.x) < rockHalf(r)) { nz = r.z + (p.z > r.z ? 0.004 : -0.004); p.vzp = 0; }
+      }
+      p.z = nz;
       p.h = clamp(p.h + p.vh * dt, shrimpH(), topH(p.z));
       if (Math.abs(p.vx) > 8 * S) p.dir = p.vx > 0 ? 1 : -1;       // immer mit dem Kopf voran, kein Zappeln
       // Nase hoch beim Steigen, runter beim Sinken
@@ -658,13 +1138,16 @@
   const TAU_UP = 3.0;    // Sekunden, bis anhaltender Lärm wirkt
   const TAU_DOWN = 6.0;  // Sekunden zum Beruhigen
 
-  function update(dt) {
+  // dt: Schritt für die Bewegung (begrenzt, damit nichts springt). sdt: echte vergangene Zeit für die Statistik.
+  function update(dt, sdt = dt) {
     st.time += dt;
-    const raw = running ? readLevel() : 0;
+    const resting = ses.on && ses.paused;      // Pause: Mikrofon wird nicht ausgewertet, das Becken kommt zur Ruhe
+    const raw = running && !resting ? readLevel() : 0;
     st.level += (raw - st.level) * (1 - Math.exp(-dt / 0.25));
-    const tau = st.level > st.unruhe ? TAU_UP : TAU_DOWN;
+    const tau = resting ? 1.2 : st.level > st.unruhe ? TAU_UP : TAU_DOWN;
     st.unruhe += (st.level - st.unruhe) * (1 - Math.exp(-dt / tau));
     const a = st.unruhe;
+    sesTick(sdt, a);
 
     st.gill += dt * lerp(1.2, 6.5, a);
     st.tail += dt * lerp(0.8, 7.5, a);
@@ -839,18 +1322,14 @@
     g.globalAlpha = 1;
 
     // Alles, was auf dem Boden liegt, wird hier gezeichnet – vor Steinen, Pflanzen und Tieren.
-    // Sandflecken und Schatten können deshalb nie etwas verdecken und nie auf einem Tier liegen.
+    // Schatten können deshalb nie etwas verdecken und nie auf einem Tier liegen.
     for (const r of ROCKS) {
       const k = S * zs(r.z), w = r.w * k;
       shadow(r.x + 14 * k, r.z, w * 0.6, 14 * k, 0.2);
-      g.fillStyle = sandAt(r.z);                // Sandfleck, in dem der Stein sitzt
-      g.beginPath(); g.ellipse(r.x, gy(r.z) + 8 * k, w * 0.56, 7 * k, 0, 0, 7); g.fill();
     }
     for (const c of PLANTS) {
       const k = S * zs(c.z), cx = c.fx * W;
       shadow(cx, c.z, c.n * 11 * k, 6 * k, 0.16);
-      g.fillStyle = sandAt(c.z);
-      g.beginPath(); g.ellipse(cx, gy(c.z) + 5 * k, c.n * 10 * k, 5 * k, 0, 0, 7); g.fill();
     }
     // Schatten der Tiere: je höher sie schwimmen, desto blasser
     for (const p of st.shrimp) {
@@ -960,9 +1439,19 @@
     g.beginPath(); g.ellipse(13, -3, 10, 7.5, 0, 0, 7); g.fill();
     g.beginPath(); g.moveTo(20, -8); g.lineTo(32, -8); g.lineTo(21, -2); g.closePath(); g.fill();
     if (v.band) { g.fillStyle = v.band; g.beginPath(); g.ellipse(8, -4, 3.5, 6.5, 0, 0, 7); g.fill(); }
-    if (v.stripe) {                                            // heller Strich auf dem Rücken
-      g.strokeStyle = v.stripe; g.lineWidth = 2.4;
-      g.beginPath(); g.moveTo(17, -10); g.quadraticCurveTo(0, -11, -17, -1); g.stroke();
+    if (v.stripe) {
+      // Heller Rückenstreifen: liegt innerhalb des Körpers und folgt dessen Rückenlinie, mit weichem Rand
+      g.save();
+      g.beginPath();
+      for (let i = 0; i <= 5; i++) { const t = i / 5; g.ellipse(14 - t * 32, -2 + t * t * 5, 9 - t * 4, 7 - t * 3.5, 0, 0, 7); g.closePath(); }
+      g.ellipse(13, -3, 10, 7.5, 0, 0, 7);
+      g.clip();
+      g.strokeStyle = v.stripe; g.lineCap = 'butt';
+      g.globalAlpha *= 0.45; g.lineWidth = 8;
+      g.beginPath(); g.moveTo(26, -9.5); g.quadraticCurveTo(2, -11.5, -24, 0.5); g.stroke();
+      g.globalAlpha /= 0.45; g.globalAlpha *= 0.9; g.lineWidth = 4;
+      g.beginPath(); g.moveTo(26, -10); g.quadraticCurveTo(2, -12, -24, 0); g.stroke();
+      g.restore();
     }
     g.fillStyle = '#fff'; g.beginPath(); g.arc(18, -6, 3.2, 0, 7); g.fill();
     g.fillStyle = '#2a1a2e'; g.beginPath(); g.arc(18.6, -6, 1.9, 0, 7); g.fill();
@@ -996,8 +1485,7 @@
 
   function drawRock(r) {
     const k = S * zs(r.z), w = r.w * k, h = r.h * k, base = gy(r.z) + 6 * k;
-    // Umriss des Steins. Die Unterkante ist geschwungen, damit er im Sandfleck sitzt
-    // (der Sandfleck selbst gehört zum Boden und wird in drawScene gezeichnet).
+    // Umriss des Steins. Die Unterkante ist leicht geschwungen, damit er auf dem Sand aufliegt.
     const rockPath = () => {
       g.beginPath();
       for (const [sx, syy] of r.shape) g.lineTo(r.x + sx * w, base - syy * h);
@@ -1013,7 +1501,16 @@
     caves.forEach((c, i) => {
       if (c.z !== r.z || Math.abs(c.x - r.x) > w) return;
       const cy = sy(c.h, c.z);
-      const hole = sc => { g.beginPath(); for (const [px, py] of c.pts) g.lineTo(c.x + px * c.rx * sc, cy + py * c.ry * sc); g.closePath(); };
+      // Das Loch reicht unten bis auf den Sandboden: Die untere Hälfte der Öffnung läuft bis unter den Stein
+      // und wird auf dessen Umriss begrenzt. So entsteht ein Durchgang wie ein Tor im Stein.
+      const floorY = base + 14 * k;
+      const hole = sc => {
+        g.beginPath();
+        for (const [px, py] of c.pts) g.lineTo(c.x + px * c.rx * sc, py > 0.2 ? floorY : cy + py * c.ry * sc);
+        g.closePath();
+      };
+      g.save();
+      rockPath(); g.clip();
       g.fillStyle = '#2f2325'; hole(1.2); g.fill();            // dunkler Rand im Gestein
       g.fillStyle = '#1c1315'; hole(1.05); g.fill();
       g.fillStyle = '#0b0607'; hole(0.88); g.fill();           // innen fast schwarz
@@ -1026,23 +1523,20 @@
         g.fillRect(c.x - c.rx * 1.3, cy - c.ry * 1.3, c.rx * 2.6, c.ry * 2.6);
         g.restore();
       }
-      // Überhang aus Gestein oben, Sand läuft unten ein Stück hinein
+      g.restore();
+      // Überhang aus Gestein oben
       g.fillStyle = '#4a3b38';
       g.beginPath(); g.ellipse(c.x + c.rx * 0.1, cy - c.ry * 1.12, c.rx * 1.15, c.ry * 0.3, -0.08, 0, 7); g.fill();
       g.fillStyle = 'rgba(126, 102, 94, 0.45)';
       g.beginPath(); g.ellipse(c.x - c.rx * 0.2, cy - c.ry * 1.2, c.rx * 0.5, c.ry * 0.12, -0.1, 0, 7); g.fill();
-      g.save();                                  // Sand im Eingang bleibt auf der Fläche des Steins
-      rockPath(); g.clip();
-      g.fillStyle = sandAt(c.z);
-      g.beginPath(); g.ellipse(c.x, cy + c.ry * 0.95, c.rx * 0.95, c.ry * 0.34, 0, 0, 7); g.fill();
-      g.restore();
     });
   }
 
   function drawFreeShrimp(p) {
     const k = S * zs(p.z);                       // ihr Schatten liegt im Boden-Durchgang (drawScene)
     const bob = Math.sin(p.ph * 0.45) * 2.5 * S * clamp((p.h - shrimpH()) / (20 * S));
-    drawShrimp(p.x, sy(p.h, p.z) + bob, k * 0.75, p.face === undefined ? p.dir : p.face, p.color, p.ph, 1, p.pitch || 0);
+    drawShrimp(p.x, sy(p.h, p.z) + bob, k * 0.75 * (p.sc || 1), p.face === undefined ? p.dir : p.face, p.color, p.ph,
+               p.state === 'enter' ? p.al : 1, p.pitch || 0);
   }
 
   // Sog: eingesaugte Garnele, Strömungslinien, Bläschen und Sandwolken – in der Tiefe des Axolotls
@@ -1303,7 +1797,7 @@
     const items = [];
     for (const r of ROCKS) items.push({ z: r.z, f: () => drawRock(r) });
     for (const c of PLANTS) items.push({ z: c.z, f: () => drawPlant(c) });
-    for (const p of st.shrimp) if (p.state === 'free' || p.state === 'flee') items.push({ z: p.z, f: () => drawFreeShrimp(p) });
+    for (const p of st.shrimp) if (p.state === 'free' || p.state === 'flee' || p.state === 'enter') items.push({ z: p.z, f: () => drawFreeShrimp(p) });
     items.push({ z: st.z, f: () => { drawAxolotl(); drawFx(); } });   // immer nach der echten Tiefe einsortiert
     items.sort((p, q) => p.z - q.z);
     let fog = 0;
@@ -1315,13 +1809,126 @@
     drawMotes(true);
     drawMurk();
     drawCounter();
+    drawWatermark();
+    drawSessionHud();
+  }
+
+  // Unauffälliges NobuKI-Wasserzeichen oben in der Mitte
+  const wmHeight = () => Math.max(18, 26 * S);
+  function drawWatermark() {
+    if (!logoImg.complete || !logoImg.naturalWidth) return;
+    const lh = wmHeight(), lw = lh * logoImg.naturalWidth / logoImg.naturalHeight, fs = lh * 0.6;
+    g.save();
+    g.globalAlpha = 0.3;
+    g.font = '700 ' + Math.round(fs) + 'px "Avenir Next", "Segoe UI", system-ui, sans-serif';
+    const label = 'NobuKI', tw = g.measureText(label).width, gap = lh * 0.25, x = (W - (lw + gap + tw)) / 2, y = 16;
+    g.drawImage(logoImg, x, y, lw, lh);
+    g.fillStyle = '#0d2a36';
+    g.textBaseline = 'middle'; g.textAlign = 'left';
+    g.fillText(label, x + lw + gap, y + lh / 2 + 1);
+    g.restore();
+  }
+
+  // Goldene Fächermuschel wie auf NobuKI
+  const SHELL_ART = {
+    body: new Path2D('M256 122 C240 115 228 122 219 140 C199 124 181 128 171 147 C149 139 134 151 132 174 C108 171 95 188 102 209 C80 213 75 231 84 249 C116 315 188 373 256 398 C324 373 396 315 428 249 C437 231 432 213 410 209 C417 188 404 171 380 174 C378 151 363 139 341 147 C331 128 313 124 293 140 C284 122 272 115 256 122 Z'),
+    ribs: ['Q178 315 102 209', 'Q190 284 132 174', 'Q218 253 171 147', 'Q240 251 219 140', 'Q272 251 293 140', 'Q294 253 341 147', 'Q322 284 380 174', 'Q334 315 410 209']
+      .map(q => new Path2D('M256 383 ' + q)),
+    base: new Path2D('M211 385 Q256 373 301 385 Q279 410 256 412 Q233 410 211 385 Z')
+  };
+  function drawShellIcon(x, y, size, gold, alpha) {
+    g.save();
+    g.globalAlpha = alpha;
+    g.translate(x, y); g.scale(size / 464, size / 464); g.translate(-24, -34);
+    g.lineJoin = 'round'; g.lineCap = 'round';
+    const edge = gold ? '#a8701a' : 'rgba(255, 255, 255, 0.8)';
+    g.fillStyle = gold ? '#f6c445' : 'rgba(255, 255, 255, 0.28)';
+    g.strokeStyle = edge; g.lineWidth = 12;
+    g.fill(SHELL_ART.body); g.stroke(SHELL_ART.body);
+    g.strokeStyle = gold ? '#d9992b' : 'rgba(255, 255, 255, 0.55)'; g.lineWidth = 9;
+    for (const r of SHELL_ART.ribs) g.stroke(r);
+    g.fillStyle = gold ? '#e8a93a' : 'rgba(255, 255, 255, 0.28)';
+    g.strokeStyle = edge; g.lineWidth = 10;
+    g.fill(SHELL_ART.base); g.stroke(SHELL_ART.base);
+    g.restore();
+  }
+
+  // Während einer Sitzung: fünf Muscheln oben links zeigen den aktuellen Stand, in der Pause ein Pause-Zeichen
+  function drawSessionHud() {
+    if (!ses.on) return;
+    // gleiche Höhe wie die Garnelen-Anzeige oben rechts
+    const csc = Math.max(0.42, S * 0.5), h = 44 * csc + 14, sz = h - 8, gap = sz * 0.12, x0 = 16, y0 = 14;
+    const have = shellsFor(sesShare()), ready = ses.active >= ses.minSeconds;   // vor Ablauf der Mindestdauer nur blass
+    // Solange die Mindestdauer nicht erreicht ist, steht daneben, wie lange es noch dauert
+    const left = Math.max(1, Math.ceil((ses.minSeconds - ses.active) / 60));
+    const hint = ready ? '' : 'zählt in ' + left + ' Min.';
+    const fsz = Math.max(12, h * 0.36);
+    g.font = '600 ' + Math.round(fsz) + 'px "Avenir Next", "Segoe UI", system-ui, sans-serif';
+    const tw = hint ? g.measureText(hint).width + fsz * 0.9 : 0;
+    const w = 5 * sz + 4 * gap + 20 + tw;
+    g.fillStyle = 'rgba(253, 248, 238, 0.4)';
+    g.beginPath();
+    if (g.roundRect) g.roundRect(x0, y0, w, h, h / 2); else g.rect(x0, y0, w, h);
+    g.fill();
+    for (let i = 0; i < 5; i++) drawShellIcon(x0 + 10 + i * (sz + gap), y0 + 4, sz, i < have, i < have ? (ready ? 1 : 0.5) : 0.9);
+    if (hint) {
+      g.fillStyle = 'rgba(18, 48, 63, 0.85)';
+      g.textBaseline = 'middle'; g.textAlign = 'left';
+      g.fillText(hint, x0 + 10 + 5 * sz + 4 * gap + fsz * 0.45, y0 + h / 2 + 1);
+    }
+    // Gleich nach dem Start: kurzer Hinweis genau in der Bildmitte, der nach einigen Sekunden ausblendet
+    const msgLeft = sesMsgUntil - st.time;
+    if (!ses.paused && msgLeft > 0) {
+      const label = 'Sitzung läuft · Muscheln ab ' + Math.round(ses.minSeconds / 60) + ' Minuten · Zum Pausieren aufs Bild tippen';
+      let fs = Math.max(14, 22 * S);
+      g.font = '600 ' + Math.round(fs) + 'px "Avenir Next", "Segoe UI", system-ui, sans-serif';
+      const fit = (W - 40) / (g.measureText(label).width + fs * 2);        // passt immer ins Bild
+      if (fit < 1) { fs *= fit; g.font = '600 ' + Math.round(fs) + 'px "Avenir Next", "Segoe UI", system-ui, sans-serif'; }
+      const tw = g.measureText(label).width, pw = tw + fs * 2, ph = fs * 2.2, px = (W - pw) / 2, py = (H - ph) / 2;
+      g.globalAlpha = clamp(msgLeft) * clamp((10 - msgLeft) * 3);
+      g.fillStyle = 'rgba(8, 48, 70, 0.74)';
+      g.beginPath();
+      if (g.roundRect) g.roundRect(px, py, pw, ph, ph / 2); else g.rect(px, py, pw, ph);
+      g.fill();
+      g.fillStyle = '#fdf8ee';
+      g.textBaseline = 'middle'; g.textAlign = 'center';
+      g.fillText(label, W / 2, py + ph / 2 + 1);
+      g.textAlign = 'left';
+      g.globalAlpha = 1;
+    }
+    // Pause: großes Pause-Zeichen in der Bildmitte, wie bei einem Video
+    if (ses.paused) {
+      const r = Math.max(44, 72 * S), cx = W / 2, cy = H / 2, bw = r * 0.2, bh = r * 0.78;
+      g.fillStyle = 'rgba(8, 48, 70, 0.22)';
+      g.fillRect(0, 0, W, H);
+      g.fillStyle = 'rgba(8, 48, 70, 0.72)';
+      g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
+      g.fillStyle = '#fdf8ee';
+      for (const sgn of [-1, 1]) {
+        g.beginPath();
+        if (g.roundRect) g.roundRect(cx + sgn * bw * 0.85 - bw / 2, cy - bh / 2, bw, bh, bw * 0.3); else g.rect(cx + sgn * bw * 0.85 - bw / 2, cy - bh / 2, bw, bh);
+        g.fill();
+      }
+      const fs = Math.max(15, 22 * S);
+      g.font = '600 ' + Math.round(fs) + 'px "Avenir Next", "Segoe UI", system-ui, sans-serif';
+      g.textBaseline = 'middle'; g.textAlign = 'center';
+      const label = 'Pause · zum Weitermachen tippen', tw = g.measureText(label).width, pw = tw + fs * 1.8, ph = fs * 2, py = cy + r + fs * 0.9;
+      g.fillStyle = 'rgba(8, 48, 70, 0.72)';
+      g.beginPath();
+      if (g.roundRect) g.roundRect(cx - pw / 2, py, pw, ph, ph / 2); else g.rect(cx - pw / 2, py, pw, ph);
+      g.fill();
+      g.fillStyle = '#fdf8ee';
+      g.fillText(label, cx, py + ph / 2 + 1);
+      g.textAlign = 'left';
+    }
   }
 
   // ---------- Schleife ----------
   let last = performance.now();
   function frame(now) {
-    const dt = Math.min(0.1, (now - last) / 1000); last = now;
-    update(dt);
+    const real = (now - last) / 1000; last = now;
+    // Statistik mit echter Zeit; Lücken über 2 Sekunden (Tab im Hintergrund, Gerät gesperrt) zählen nicht mit
+    update(Math.min(0.1, real), real > 2 ? 0 : real);
     draw();
     requestAnimationFrame(frame);
   }
