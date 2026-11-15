@@ -346,7 +346,7 @@
   // ---------- Tablet ----------
   const isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
   // Fassung dieser Datei, klein im Startfenster: So lässt sich auf jedem Gerät sehen, ob die neueste Fassung läuft
-  const VERSION = '15.11.2026 · 11';
+  const VERSION = '15.11.2026 · 12';
   $('ver').textContent = 'Fassung ' + VERSION;
   if (isTouch) document.body.classList.add('touch');
   // Smartphone: kurze Bildschirmseite deutlich kleiner als bei einem Tablet
@@ -588,7 +588,7 @@
   // ---------- Klänge für die Arbeitsphase ----------
   // Musik, Meeresrauschen und Regen werden direkt im Browser erzeugt (keine Tondateien).
   const snd = { on: { music: false, ocean: false, rain: false }, built: false,
-                g: Infinity, micS: 0, outS: 0, t: 0, graceUntil: 0, fakeMic: null };
+                g: Infinity, micS: 0, outS: 0, micL: 0, outL: 0, hist: [], learnT: 0, t: 0, graceUntil: 0, fakeMic: null };
   const sndAny = () => snd.on.music || snd.on.ocean || snd.on.rain;
   const sndVolume = () => { const v = $('sndVol').value / 100; return v * v * 1.25; };
 
@@ -712,7 +712,7 @@
     if (name === 'music' && on) { musicCount = 0; musicLoop(); }
     if (name === 'rain' && on) rainLoop();
     // Nach jedem Umschalten kurz neu einmessen, wie stark die Klänge beim Mikrofon ankommen
-    snd.g = Infinity; snd.micS = 0; snd.outS = 0; snd.graceUntil = performance.now() + 3000;
+    snd.g = Infinity; snd.micS = 0; snd.outS = 0; snd.micL = 0; snd.outL = 0; snd.hist = []; snd.learnT = 0; snd.graceUntil = performance.now() + 3000;
     setMicEcho(sndAny());
   }
   // In der Pause blenden die Klänge aus, beim Weitermachen wieder ein
@@ -750,9 +750,15 @@
   });
 
   // Die App weiß, wie laut sie selbst gerade spielt, und zieht diesen Anteil von der Mikrofon-Messung ab.
-  // Wie stark der Lautsprecher beim Mikrofon ankommt (g), lernt sie selbst: Sie merkt sich den leisesten Moment
-  // im Verhältnis zum eigenen Klang. Der Wert darf langsam wieder steigen, damit sich eine geänderte
+  // Wie stark der Lautsprecher beim Mikrofon ankommt (g), lernt sie selbst aus dem leisesten Moment im
+  // Verhältnis zum eigenen Klang. Der Wert darf langsam wieder steigen, damit sich eine geänderte
   // Gerätelautstärke nach kurzer Zeit einpendelt.
+  // Wichtig: Der eigene Klang kommt verspätet am Mikrofon an – über die Lautsprecher des Geräts nur einen
+  // Wimpernschlag, über AirPlay, Bluetooth oder einen Fernseher aber zwei Sekunden und mehr. Deshalb wird
+  // g aus langsamen Mittelwerten gelernt (Verspätung spielt dann keine Rolle), und abgezogen wird der
+  // lauteste eigene Klang der letzten gut drei Sekunden. So bleibt der Axolotl auch dann ruhig, wenn die
+  // Musik über den Fernseher läuft.
+  const ECHO_WINDOW = 3.2, ECHO_SLOW = 6, ECHO_SAFE = 1.5;
   function cleanMic(pow) {
     if (!snd.built || !sndAny()) return pow;                 // ohne Klänge bleibt die Messung wie immer
     snd.outAn.getFloatTimeDomainData(snd.obuf);
@@ -761,12 +767,19 @@
     o /= snd.obuf.length;
     const now = performance.now(), dt = snd.t ? Math.min(0.2, (now - snd.t) / 1000) : 0.016;
     snd.t = now;
-    const k = 1 - Math.exp(-dt / 0.35);
+    const k = 1 - Math.exp(-dt / 0.35), kl = 1 - Math.exp(-dt / ECHO_SLOW);
     snd.outS += (o - snd.outS) * k; snd.micS += (pow - snd.micS) * k;
-    if (snd.outS < 1e-9) return pow;                          // gerade nichts zu hören (ausgeblendet)
-    snd.g = Math.min(snd.g === Infinity ? Infinity : snd.g * (1 + dt / 15), snd.micS / snd.outS);
-    if (now < snd.graceUntil) return 0;                       // beim Einmessen wird der Axolotl nicht aufgeschreckt
-    return Math.max(0, snd.micS - snd.g * snd.outS * 2);      // doppelter Abzug als Sicherheit gegen Schwankungen
+    snd.outL += (o - snd.outL) * kl; snd.micL += (pow - snd.micL) * kl;
+    // lautester eigener Klang im Zeitfenster
+    snd.hist.push(now, snd.outS);
+    while (snd.hist.length && snd.hist[0] < now - ECHO_WINDOW * 1000) snd.hist.splice(0, 2);
+    let ref = 0;
+    for (let i = 1; i < snd.hist.length; i += 2) if (snd.hist[i] > ref) ref = snd.hist[i];
+    if (snd.outL < 1e-9) return pow;                          // gerade nichts zu hören (ausgeblendet)
+    snd.learnT += dt;
+    if (snd.learnT > 2 * ECHO_SLOW) snd.g = Math.min(snd.g === Infinity ? Infinity : snd.g * (1 + dt / 15), snd.micL / snd.outL);
+    if (now < snd.graceUntil || snd.g === Infinity) return 0; // beim Einmessen wird der Axolotl nicht aufgeschreckt
+    return Math.max(0, snd.micS - snd.g * ref * ECHO_SAFE);
   }
 
   // Aktuelle Lautstärke als Wert 0..1 (0 = ruhig genug, 1 = zu laut)
