@@ -40,6 +40,12 @@
   #start h1 { margin: 0 0 10px; font-size: 32px; }
   #start p { margin: 0 0 22px; font-size: 18px; line-height: 1.45; }
   #start .hint { font-size: 14px; color: #55707d; margin: 18px 0 0; }
+  #classRow { margin: 0 0 20px; }
+  #classRow label { display: block; font-weight: 600; font-size: 16px; margin-bottom: 6px; }
+  #classRow select {
+    font: inherit; font-size: 18px; padding: 10px 14px; border-radius: 14px; border: 2px solid #b9c6c9;
+    background: #fff; color: inherit; min-width: 240px; max-width: 100%; min-height: 48px;
+  }
   #error { display: none; background: #ffe3e0; color: #8a1f14; border-radius: 12px; padding: 12px 14px; font-size: 16px; margin: 0 0 18px; }
   button {
     font: inherit; cursor: pointer; border: none; border-radius: 999px;
@@ -149,6 +155,11 @@
     <h1>Pssst … der Axolotl ruht sich aus</h1>
     <p>Wenn es im Raum leise ist, bleibt er entspannt liegen. Wird es laut, wird er unruhig.</p>
     <div id="error"></div>
+    <!-- Nur eingebettet in NobuKI: Für welche Klasse werden die Muscheln gesammelt? -->
+    <div id="classRow" hidden>
+      <label for="classSel">Für welche Klasse?</label>
+      <select id="classSel"></select>
+    </div>
     <button class="primary" id="btnMic">Mikrofon starten</button>
     <p style="margin:14px 0 0"><button class="secondary" id="btnDemo">Ohne Mikrofon ausprobieren</button></p>
     <p class="hint">Es wird nichts aufgenommen oder gespeichert. Die App misst nur, wie laut es gerade ist.</p>
@@ -326,17 +337,17 @@
     micSrc.connect(analyser);
     stream.getAudioTracks().forEach(t => t.addEventListener('ended', micLost));
   }
-  // Laufen eigene Klänge, wird das Mikrofon mit der Echo-Unterdrückung des Browsers geöffnet, sonst ohne.
-  // Klappt der Wechsel nicht, bleibt das bisherige Mikrofon einfach in Betrieb.
+  // Laufen eigene Klänge, wird am schon geöffneten Mikrofon die Echo-Unterdrückung des Browsers zugeschaltet,
+  // sonst abgeschaltet. Das Mikrofon wird dafür nie neu geöffnet, damit der Browser nicht erneut um Erlaubnis fragt.
+  // Kann der Browser die Einstellung nicht im laufenden Betrieb ändern, bleibt alles, wie es ist; das Herausrechnen
+  // der eigenen Klänge (cleanMic) funktioniert auch ohne.
   async function setMicEcho(on) {
     if (demoMode || !micStream || micEc === on) return;
     micEc = on;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: on, noiseSuppression: false, autoGainControl: false }
-      });
-      if (micEc === on) useMicStream(stream); else stream.getAudioTracks().forEach(t => t.stop());
-    } catch { /* bisheriges Mikrofon bleibt */ }
+    for (const t of micStream.getAudioTracks()) {
+      try { await t.applyConstraints({ echoCancellation: on, noiseSuppression: false, autoGainControl: false }); }
+      catch { /* nicht unterstützt: Mikrofon bleibt unverändert */ }
+    }
   }
 
   async function startMic() {
@@ -636,7 +647,7 @@
   minSel.addEventListener('input', () => { syncMinOut(); if (!ses.on) store.set('axo.min', String(minMinutes())); });
   syncMinOut();
   const shellsFor = share => share >= 0.95 ? 5 : share >= 0.8 ? 4 : share >= 0.6 ? 3 : share >= 0.4 ? 2 : share >= 0.2 ? 1 : 0;
-  const newSes = () => ({ on: false, paused: false, id: null, startedAt: null, endedAt: null, minSeconds: 15 * 60,
+  const newSes = () => ({ on: false, paused: false, id: null, startedAt: null, endedAt: null, minSeconds: 15 * 60, classId: null,
                           active: 0, sleep: 0, awake: 0, hunt: 0, wakeups: 0, attacks: 0, asleep: true, asleepFor: 0, saveT: 0 });
   let ses = newSes(), sesMsgUntil = 0;
   Object.defineProperty(st, 'ses', { get: () => ses });
@@ -694,6 +705,7 @@
     ses.id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 's' + Date.now() + Math.random().toString(16).slice(2);
     ses.startedAt = new Date().toISOString();
     ses.minSeconds = minMinutes() * 60;
+    ses.classId = embedded && $('classSel').value ? $('classSel').value : null;   // gilt für die ganze Sitzung
     ses.asleep = st.unruhe < 0.05 && st.sad < 0.05;
     if (ses.asleep) ses.asleepFor = 5;          // er schlief schon vorher: Wacht er gleich auf, zählt das
     else ses.wakeups = 1;                       // beim Start schon wach: zählt als einmal aufgewacht
@@ -725,20 +737,38 @@
       cell(fmtMin(ses.hunt), 'davon war er auf der Jagd') +
       cell(ses.wakeups + ' Mal', 'ist er aus dem Schlaf aufgewacht') +
       cell(ses.attacks + ' Mal', 'hat er eine Garnele gefressen oder fast erwischt');
-    $('resMsg').textContent = embedded ? (n > 0 ? 'Jedes Kind der Klasse bekommt gleich viele Muscheln.' : '')
-      : (n > 0 ? 'Muscheln gibt es, wenn du den Axolotl in NobuKI startest.' : '');
-    $('btnAward').hidden = !(embedded && n > 0);
+    const className = ses.classId ? (classList.find(c => String(c.id) === String(ses.classId)) || {}).name : '';
+    $('resMsg').textContent = n === 0 ? ''
+      : !embedded ? 'Muscheln gibt es, wenn du den Axolotl in NobuKI startest.'
+      : !ses.classId ? 'Für diese Sitzung war keine Klasse gewählt. Deshalb können keine Muscheln vergeben werden.'
+      : 'Jedes Kind' + (className ? ' der ' + className : ' der Klasse') + ' bekommt gleich viele Muscheln.';
+    $('btnAward').hidden = !(embedded && n > 0 && ses.classId);
     $('btnAward').disabled = false;
     $('result').hidden = false;
     toHost({ type: 'session-ended', sessionId: ses.id });
   }
+
+  // Klassen der angemeldeten Lehrkraft, von NobuKI gemeldet. Auswahl im Startfenster:
+  // Kommt man aus einer Klasse, ist sie schon gewählt; bei nur einer Klasse ebenfalls.
+  let classList = [];
+  function setClasses(list, selectedId) {
+    classList = Array.isArray(list) ? list.filter(c => c && c.id != null).map(c => ({ id: String(c.id), name: String(c.name || 'Klasse') })) : [];
+    const sel = $('classSel');
+    sel.textContent = '';
+    for (const c of classList) { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; sel.appendChild(o); }
+    const want = selectedId != null ? String(selectedId) : store.get('axo.class', '');
+    if (classList.some(c => c.id === want)) sel.value = want;
+    $('classRow').hidden = classList.length === 0;
+    sel.disabled = classList.length === 1 || ses.on;
+  }
+  $('classSel').addEventListener('change', () => store.set('axo.class', $('classSel').value));
 
   // Ergebnis an NobuKI melden. NobuKI rechnet die Muscheln selbst nach und bucht sie für die ganze Klasse.
   let awardTimer = 0;
   $('btnAward').addEventListener('click', () => {
     $('btnAward').disabled = true;
     $('resMsg').textContent = 'Die Muscheln werden gutgeschrieben …';
-    toHost({ type: 'session-result', sessionId: ses.id, startedAt: ses.startedAt, endedAt: ses.endedAt,
+    toHost({ type: 'session-result', sessionId: ses.id, classId: ses.classId, startedAt: ses.startedAt, endedAt: ses.endedAt,
              minSeconds: ses.minSeconds, activeSeconds: Math.round(ses.active), sleepSeconds: Math.round(ses.sleep), awakeSeconds: Math.round(ses.awake),
              huntSeconds: Math.round(ses.hunt), wakeups: ses.wakeups, shrimpAttacks: ses.attacks, shells: sesShells() });
     clearTimeout(awardTimer);
@@ -750,7 +780,9 @@
   window.addEventListener('message', e => {
     if (!embedded || e.origin !== location.origin || e.source !== window.parent) return;
     const d = e.data;
-    if (!d || d.app !== 'leise-axolotl' || d.type !== 'award-result' || d.sessionId !== ses.id) return;
+    if (!d || d.app !== 'leise-axolotl') return;
+    if (d.type === 'classes') { setClasses(d.classes, d.selectedId); return; }
+    if (d.type !== 'award-result' || d.sessionId !== ses.id) return;
     clearTimeout(awardTimer);
     if (d.ok) {
       $('btnAward').hidden = true;
