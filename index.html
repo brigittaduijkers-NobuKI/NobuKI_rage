@@ -342,8 +342,12 @@
   //   Ton-Kontext    – der Browser hat den Ton angehalten: wieder aufnehmen, notfalls mit einem Tipp der Lehrkraft.
   //   Mikrofon       – die Aufnahme wurde beendet oder stummgeschaltet: neu anschließen, die Sitzung bleibt bestehen.
   // Solange nicht wirklich gemessen wird, zählt die Statistik nicht.
-  let micDown = false, micMuted = false;
-  const measuring = () => demoMode || (!!analyser && !micDown && !micMuted && !!audioCtx && audioCtx.state === 'running');
+  // Stumm gilt das Mikrofon nur, solange der Browser es in diesem Augenblick so meldet. Beim Ein- und Ausschalten
+  // der Klänge stellt der Browser das Mikrofon kurz um und meldet es dabei einen Moment lang stumm; ein gemerkter
+  // Zustand bliebe dann hängen und die Messung stünde still.
+  let micDown = false;
+  const micMutedNow = () => { const ts = micStream ? micStream.getAudioTracks() : []; return ts.length > 0 && ts.every(t => t.muted); };
+  const measuring = () => demoMode || (!!analyser && !micDown && !micMutedNow() && !!audioCtx && audioCtx.state === 'running');
   const showResume = show => { $('resume').hidden = !show; };
 
   document.addEventListener('visibilitychange', () => {
@@ -381,7 +385,7 @@
       await wakeAudio(ac);
       useMicStream(stream);
       micEc = false; setMicEcho(sndAny());
-      micDown = false; micMuted = false;
+      micDown = false;
       showResume(ac.state !== 'running');
       note('mikrofon-wieder-da');
     } catch {
@@ -407,8 +411,8 @@
     return audioCtx;
   };
   let micStream = null, micSrc = null, micEc = false;
-  const onMute = () => { micMuted = true; note('mikrofon-stumm'); };
-  const onUnmute = () => { micMuted = false; note('mikrofon-laut'); };
+  const onMute = () => note('mikrofon-stumm');
+  const onUnmute = () => note('mikrofon-laut');
   // Mikrofon an die Messung anschließen; ein vorheriges Mikrofon wird sauber abgelöst
   function useMicStream(stream) {
     if (micStream) micStream.getAudioTracks().forEach(t => {
@@ -421,7 +425,6 @@
     if (meterNode) micSrc.connect(meterNode);
     stream.getAudioTracks().forEach(t => {
       t.addEventListener('ended', micLost); t.addEventListener('mute', onMute); t.addEventListener('unmute', onUnmute);
-      micMuted = t.muted;
     });
   }
 
