@@ -134,6 +134,7 @@
   #panel input[type=range] { width: 100%; accent-color: #e0568a; }
   #panel select { width: 100%; font: inherit; padding: 6px 8px; border-radius: 10px; border: 1px solid #b9c6c9; background: #fff; color: inherit; }
   #panel .row { display: flex; gap: 8px; margin-top: 12px; }
+  #panel .row[hidden] { display: none; }   /* versteckte Zeilen wirklich verstecken */
   #panel .small { padding: 8px 12px; font-size: 14px; background: #1b6f93; color: #fff; flex: 1; }
   #toggle { background: transparent; padding: 4px 8px; font-size: 20px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
   #toggle svg { width: 16px; height: 16px; display: block; }
@@ -328,7 +329,8 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const canvas = $('c'), g = canvas.getContext('2d');
+  const canvas = $('c');
+  let g = canvas.getContext('2d');             // „let“: blasse Garnelen werden kurz auf eine Zwischenfläche gezeichnet
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
   const lerp = (a, b, t) => a + (b - a) * t;
   const smooth = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0)); return t * t * (3 - 2 * t); };
@@ -396,7 +398,7 @@
   const micWish = parseFloat(urlParams.get('mikro'));
   const MIC_BOOST_DB = isFinite(micWish) ? Math.max(-20, Math.min(50, micWish)) : (isIOS ? 20 : 0);
   // Fassung dieser Datei, klein im Startfenster: So lässt sich auf jedem Gerät sehen, ob die neueste Fassung läuft
-  const VERSION = '16.11.2026 · 17' + (MIC_BOOST_DB ? ' · Mikrofon +' + MIC_BOOST_DB : '') + (urlParams.get('klaenge') === '1' ? ' · Klänge an' : '');
+  const VERSION = '16.11.2026 · 18' + (MIC_BOOST_DB ? ' · Mikrofon +' + MIC_BOOST_DB : '') + (urlParams.get('klaenge') === '1' ? ' · Klänge an' : '');
   $('ver').textContent = 'Fassung ' + VERSION;
   if (isTouch) document.body.classList.add('touch');
   // Smartphone: kurze Bildschirmseite deutlich kleiner als bei einem Tablet
@@ -629,10 +631,12 @@
   const fsRequest = rootEl.requestFullscreen || rootEl.webkitRequestFullscreen;
   const fsExit = document.exitFullscreen || document.webkitExitFullscreen;
   const fsActive = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const fsEnabled = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
   const standalone = navigator.standalone === true || (window.matchMedia &&
     (matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches));
   if (standalone) $('fullRow').hidden = true;                 // läuft schon als App ohne Browserleisten
-  else if (!fsRequest) { $('fullRow').hidden = true; $('fsHint').hidden = false; }
+  // Den Knopf gibt es nur, wenn der Browser Vollbild wirklich erlaubt (das iPhone zum Beispiel nicht)
+  else if (!fsRequest || !fsEnabled) { $('fullRow').hidden = true; $('fsHint').hidden = false; }
   else if (isTouch) $('fsHint').hidden = false;
   $('btnFull').addEventListener('click', () => {
     try {
@@ -1713,7 +1717,28 @@
     g.globalAlpha = 1;
   }
 
+  // Blasse Garnelen (versteckt oder gefressen in der Anzeige, beim Einsaugen): Der Körper besteht aus Teilen, die
+  // sich überlappen. Direkt durchscheinend gezeichnet, würden die Überlappungen als dunklere Streifen sichtbar.
+  // Deshalb wird die Garnele erst deckend auf eine Zwischenfläche gezeichnet und dann als Ganzes blass aufgetragen.
+  const shrimpLayer = document.createElement('canvas');
   function drawShrimp(x, y, sc, dir, color, ph, alpha, pitch = 0) {
+    if (alpha >= 0.999 || alpha <= 0) { drawShrimpRaw(x, y, sc, dir, color, ph, alpha, pitch); return; }
+    const m = g.getTransform(), k = Math.hypot(m.a, m.b) || 1;     // Bildpunkte pro Einheit
+    const R = 46 * sc + 2, size = Math.ceil(2 * R * k);
+    if (!(size > 0) || size > 2000) { drawShrimpRaw(x, y, sc, dir, color, ph, alpha, pitch); return; }
+    if (shrimpLayer.width < size) { shrimpLayer.width = size; shrimpLayer.height = size; }
+    const lg = shrimpLayer.getContext('2d'), main = g;
+    lg.setTransform(1, 0, 0, 1, 0, 0);
+    lg.clearRect(0, 0, shrimpLayer.width, shrimpLayer.height);
+    lg.setTransform(k, 0, 0, k, 0, 0);
+    g = lg;
+    try { drawShrimpRaw(R, R, sc, dir, color, ph, 1, pitch); } finally { g = main; }
+    g.save();
+    g.globalAlpha = alpha;
+    g.drawImage(shrimpLayer, 0, 0, size, size, x - R, y - R, size / k, size / k);
+    g.restore();
+  }
+  function drawShrimpRaw(x, y, sc, dir, color, ph, alpha, pitch = 0) {
     const v = typeof color === 'string' ? { base: color } : color;
     // dir gleitet beim Wenden von -1 nach 1. In der Mitte der Drehung sieht man die Garnele kurz von vorn.
     const fd = Math.abs(dir) < 0.1 ? (dir < 0 ? -0.1 : 0.1) : dir, turn = 1 - Math.min(1, Math.abs(fd));
