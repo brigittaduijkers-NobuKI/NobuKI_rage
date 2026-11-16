@@ -44,18 +44,48 @@
   /* Hinweis nur auf Smartphones */
   #start .phoneTip { background: #e3f2f0; color: #12303f; border-radius: 12px; padding: 10px 14px; font-size: 15px; line-height: 1.4; margin: 0 0 18px; }
   #start .phoneTip[hidden] { display: none; }
-  /* Niedrige Bildschirme (Smartphone quer): Startfenster kompakter und zum Schieben, damit alles erreichbar bleibt */
-  @media (max-height: 560px) {
-    #start { align-items: flex-start; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 10px; }
-    #start .card { padding: 16px 22px; margin: auto; max-width: 560px; }
-    .brand { margin: 0 0 4px; }
-    .brand img { width: 56px; }
+  /* Das Startfenster lässt sich immer schieben, falls es einmal höher ist als der Bildschirm */
+  #start { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  #start .card { margin: auto; }
+  #start button { min-height: 44px; }
+  /* Schmale Bildschirme (Smartphone hochkant): alles etwas kleiner, damit das Fenster ganz auf den Bildschirm passt */
+  @media (max-width: 480px) {
+    #start { padding: 10px; }
+    #start .card { padding: 14px 16px; border-radius: 20px; }
+    .brand { margin: 0 0 6px; }
+    .brand img { width: 48px; }
     .brand span { font-size: 14px; }
     #start h1 { font-size: 22px; margin-bottom: 6px; }
-    #start p { font-size: 15px; margin-bottom: 12px; }
-    #start .phoneTip { font-size: 13.5px; padding: 8px 12px; margin-bottom: 12px; }
-    #start .hint { font-size: 12.5px; margin-top: 10px; }
+    #start p { font-size: 15px; margin-bottom: 12px; line-height: 1.4; }
+    #start .phoneTip { font-size: 13px; padding: 8px 12px; margin-bottom: 12px; }
+    #start .hint { font-size: 13px; margin-top: 10px; }
+    #start .ver { margin-top: 4px; }
     #classRow { margin-bottom: 12px; }
+    #classRow select { min-height: 48px; font-size: 17px; padding: 8px 52px 8px 14px; }
+  }
+  /* Niedrige Bildschirme (Smartphone quer): noch kompakter, damit beide Knöpfe ohne Schieben sichtbar sind */
+  @media (max-height: 560px) {
+    #start { align-items: flex-start; padding: 8px; }
+    #start .card { padding: 10px 20px; max-width: 600px; border-radius: 20px; }
+    .brand { flex-direction: row; justify-content: center; gap: 8px; margin: 0 0 2px; }
+    .brand img { width: 40px; }
+    .brand span { font-size: 13px; margin-top: 0; }
+    #start h1 { font-size: 20px; margin-bottom: 4px; }
+    #start p { font-size: 14px; margin-bottom: 8px; line-height: 1.35; }
+    #start .phoneTip { font-size: 13px; padding: 6px 12px; margin-bottom: 8px; }
+    #start .hint { font-size: 12px; margin-top: 6px; }
+    #start .ver { margin-top: 2px; }
+    #start p[style] { margin-top: 4px !important; }
+    #start button.primary { padding: 9px 22px; }
+    #start button.secondary { padding: 6px 12px; }
+    /* Klassenwahl in einer Zeile: Beschriftung links, Auswahl rechts daneben */
+    #classRow:not([hidden]) { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 8px; }
+    #classRow label { font-size: 14px; margin: 0; white-space: nowrap; }
+    #classRow select { min-height: 44px; font-size: 16px; padding: 6px 52px 6px 14px; width: auto; flex: 1; max-width: 340px; }
+  }
+  /* Sehr niedrige Bildschirme: Der einleitende Satz entfällt, damit beide Knöpfe sichtbar bleiben */
+  @media (max-height: 400px) {
+    #start .card > p.intro { display: none; }
   }
   #classRow { margin: 0 0 20px; }
   #classRow label { display: block; font-weight: 600; font-size: 16px; margin-bottom: 6px; }
@@ -189,7 +219,7 @@
   <div class="card">
     <div class="brand"><img id="brandLogo" alt="" width="300" height="140"><span>NobuKI</span></div>
     <h1>Pssst … der Axolotl ruht sich aus</h1>
-    <p>Wenn es im Raum leise ist, bleibt er entspannt liegen. Wird es laut, wird er unruhig.</p>
+    <p class="intro">Wenn es im Raum leise ist, bleibt er entspannt liegen. Wird es laut, wird er unruhig.</p>
     <div id="error"></div>
     <!-- Nur eingebettet in NobuKI: Für welche Klasse werden die Muscheln gesammelt? -->
     <div id="classRow" hidden>
@@ -366,7 +396,7 @@
   const micWish = parseFloat(urlParams.get('mikro'));
   const MIC_BOOST_DB = isFinite(micWish) ? Math.max(-20, Math.min(50, micWish)) : (isIOS ? 20 : 0);
   // Fassung dieser Datei, klein im Startfenster: So lässt sich auf jedem Gerät sehen, ob die neueste Fassung läuft
-  const VERSION = '16.11.2026 · 16' + (MIC_BOOST_DB ? ' · Mikrofon +' + MIC_BOOST_DB : '') + (urlParams.get('klaenge') === '1' ? ' · Klänge an' : '');
+  const VERSION = '16.11.2026 · 17' + (MIC_BOOST_DB ? ' · Mikrofon +' + MIC_BOOST_DB : '') + (urlParams.get('klaenge') === '1' ? ' · Klänge an' : '');
   $('ver').textContent = 'Fassung ' + VERSION;
   if (isTouch) document.body.classList.add('touch');
   // Smartphone: kurze Bildschirmseite deutlich kleiner als bei einem Tablet
