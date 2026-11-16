@@ -242,8 +242,8 @@
       <input type="range" id="demo" min="0" max="100" value="0">
     </div>
 
-    <div class="title">Klänge für die Arbeitsphase</div>
     <div id="sndBox">
+      <div class="title">Klänge für die Arbeitsphase</div>
       <label class="opt"><input type="checkbox" id="sndMusic"> Entspannungsmusik</label>
       <label class="opt"><input type="checkbox" id="sndOcean"> Meeresrauschen</label>
       <label class="opt"><input type="checkbox" id="sndRain"> Regen</label>
@@ -251,7 +251,6 @@
       <input type="range" id="sndVol" min="0" max="100" value="50">
       <p class="note" style="margin-top:4px">Der Axolotl hört diese Klänge nicht mit. Am besten nicht zu laut stellen.</p>
     </div>
-    <p class="note" id="sndNo" style="margin-top:0" hidden>Musik, Meeresrauschen und Regen gibt es in Google Chrome auf einem Laptop oder Rechner. In Safari und auf iPad oder iPhone kann der Axolotl sie nicht von den Geräuschen der Klasse unterscheiden.</p>
 
     <div class="title">Sitzung</div>
     <p class="note" id="sesInfo" style="margin-top:0">Keine Sitzung gestartet.</p>
@@ -367,7 +366,7 @@
   const micWish = parseFloat(urlParams.get('mikro'));
   const MIC_BOOST_DB = isFinite(micWish) ? Math.max(-20, Math.min(50, micWish)) : (isIOS ? 20 : 0);
   // Fassung dieser Datei, klein im Startfenster: So lässt sich auf jedem Gerät sehen, ob die neueste Fassung läuft
-  const VERSION = '15.11.2026 · 15' + (MIC_BOOST_DB ? ' · Mikrofon +' + MIC_BOOST_DB : '') + (urlParams.get('klaenge') === '1' ? ' · Klänge an' : '');
+  const VERSION = '16.11.2026 · 16' + (MIC_BOOST_DB ? ' · Mikrofon +' + MIC_BOOST_DB : '') + (urlParams.get('klaenge') === '1' ? ' · Klänge an' : '');
   $('ver').textContent = 'Fassung ' + VERSION;
   if (isTouch) document.body.classList.add('touch');
   // Smartphone: kurze Bildschirmseite deutlich kleiner als bei einem Tablet
@@ -519,10 +518,11 @@
   // Echo-Unterdrückung eingeschaltet wird, kommt dort kein Geräusch mehr an, auch nicht nach dem Ausschalten.
   // Dort bleibt das Mikrofon deshalb unverändert; der eigene Klang wird nur von der App selbst abgezogen.
   const isSafariKind = /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg\//.test(navigator.userAgent);
-  // In Safari gibt es die Klänge deshalb gar nicht: Dort ließ sich weder das Abziehen noch ein flüssiger Ton
-  // über AirPlay erreichen. Der Axolotl selbst funktioniert dort ohne Klänge.
-  const soundsOff = isSafariKind && new URLSearchParams(location.search).get('klaenge') !== '1';
-  if (soundsOff) { $('sndBox').hidden = true; $('sndNo').hidden = false; }
+  // Die Klänge (Musik, Meeresrauschen, Regen) sind überall ausgeblendet: Nicht auf jedem Gerät ließ sich
+  // erreichen, dass der Axolotl sie zuverlässig von den Geräuschen der Klasse unterscheidet. Der Programmteil
+  // bleibt erhalten und lässt sich zum Ausprobieren mit ?klaenge=1 am Ende der Adresse wieder einblenden.
+  const soundsOff = urlParams.get('klaenge') !== '1';
+  if (soundsOff) $('sndBox').hidden = true;
   async function setMicEcho(on) {
     if (isSafariKind) return;
     if (demoMode || !micStream || micEc === on) return;
@@ -1205,7 +1205,7 @@
     backY = H * 0.66; frontY = H * 0.98;
     if (!W || !H) return;
     layout();
-    if (!st.placed) { st.x = W / 2; st.h = homeH(); st.z = HOME_Z; st.placed = true; }
+    if (!st.placed || !isFinite(st.x + st.h + st.z)) { st.x = W / 2; st.h = homeH(); st.z = HOME_Z; st.vx = 0; st.vh = 0; st.vzp = 0; st.placed = true; }
     else if (oldW) { st.x *= W / oldW; for (const p of st.shrimp) { p.x *= W / oldW; p.tx *= W / oldW; } }
   }
   window.addEventListener('resize', resize);
@@ -2253,6 +2253,7 @@
     const real = (now - last) / 1000;
     if (real <= 0) return;
     last = now;
+    if (!W || !H) return;                      // Fenster hat noch keine Größe: nichts bewegen, sonst entstehen ungültige Werte
     update(Math.min(0.1, real), count && real <= 2 ? real : 0);
   }
   // Sichtbarer Tab: Die Animation gibt den Takt vor.
@@ -2261,7 +2262,7 @@
     if (now - lastRaf < 12) return;            // höchstens 60 Bilder pro Sekunde, auch auf Bildschirmen mit 120
     lastRaf = now;
     step(now, true);
-    draw();
+    if (W && H) draw();
   }
   requestAnimationFrame(frame);
   // Tab im Hintergrund: Der Browser hält die Animation an. Dann treibt der Taktgeber aus dem Ton die Messung
